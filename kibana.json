@@ -1,0 +1,14 @@
+{
+  "id": "baalert",
+  "version": "1.0.0",
+  "kibanaVersion": "kibana",
+  "owner": {
+    "name": "andy tanuwidjaja",
+    "githubTeam": ""
+  },
+  "description": "Alerting Frontend Plugin",
+  "server": true,
+  "ui": true,
+  "requiredPlugins": ["navigation"],
+  "optionalPlugins": []
+}
