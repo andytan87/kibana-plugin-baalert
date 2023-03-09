@@ -1,4 +1,4 @@
-import React, { Component, Fragment } from 'react';
+import React, { Component, Fragment, useState } from 'react';
 
 import {
   EuiButton,
@@ -25,8 +25,12 @@ import {
 import {
   setHttpClient,
   analyze,
-  multiAnalyze
+  getSuccessfullAlerts,
+  getTotalAlerts,
+  getFailedAlerts,
 } from "../../services/api";
+
+import { CoreStart } from '../../../../../src/core/public';
 
 import {loadSavedState, saveState} from "../../services/state_handler";
 
@@ -36,14 +40,141 @@ export class StatusUI extends Component {
     const params = loadSavedState();
     this.state = {
       params: params,
-      errors: {}
+      errors: {},
+      failedAlert: "-",
+      successfullAlert: "-",
+      totalAlert: "-",
+      time: new Date()
     };
 
     setHttpClient(this.props.httpClient);
 
   };
 
-  
+
+  failedAlerts() {
+    const result = getFailedAlerts();
+    result.then(
+      (response) => {
+        // console.log(response)
+        this.setState({
+          showResult: true,
+          failedAlert: response.message
+        });
+      }
+    ).catch(
+      error => {
+        if (error.body) {
+          if (error.body.statusCode == 404) {
+            this.setState({
+              errors: {
+                indexNameError: error.body.message
+              }
+            })
+          } else if (error.body.statusCode == 400) {
+            this.setState({
+              errors: {
+                analyzerError: error.body.message
+              }
+            });
+          } else {
+            //TODO Notification
+            console.error(error);
+          }
+        } else {
+          //TODO Notification
+          console.error(error);
+        }
+      }
+    );
+  }
+
+
+  totalAlerts() {
+    const result = getTotalAlerts();
+    result.then(
+      (response) => {
+        // console.log(response)
+        this.setState({
+          showResult: true,
+          totalAlert: response.message
+        });
+      }
+    ).catch(
+      error => {
+        if (error.body) {
+          if (error.body.statusCode == 404) {
+            this.setState({
+              errors: {
+                indexNameError: error.body.message
+              }
+            })
+          } else if (error.body.statusCode == 400) {
+            this.setState({
+              errors: {
+                analyzerError: error.body.message
+              }
+            });
+          } else {
+            //TODO Notification
+            console.error(error);
+          }
+        } else {
+          //TODO Notification
+          console.error(error);
+        }
+      }
+    );
+  }
+
+  successfullAlerts() {
+    const result = getSuccessfullAlerts();
+    result.then(
+      (response) => {
+        // console.log(response)
+        this.setState({
+          showResult: true,
+          successfullAlert: response.message
+        });
+      }
+    ).catch(
+      error => {
+        if (error.body) {
+          if (error.body.statusCode == 404) {
+            this.setState({
+              errors: {
+                indexNameError: error.body.message
+              }
+            })
+          } else if (error.body.statusCode == 400) {
+            this.setState({
+              errors: {
+                analyzerError: error.body.message
+              }
+            });
+          } else {
+            //TODO Notification
+            console.error(error);
+          }
+        } else {
+          //TODO Notification
+          console.error(error);
+        }
+      }
+    );
+  }
+
+  tick() {
+    this.setState({
+      time: new Date()
+    });
+  }
+
+  componentDidMount() {
+    setInterval(() => this.totalAlerts(), 1000);
+    setInterval(() => this.failedAlerts(), 1000);
+
+  }
 
   render() {
     return (
@@ -52,14 +183,11 @@ export class StatusUI extends Component {
           <EuiFlexItem>
             <EuiPanel hasBorder={true}>
                   <EuiStat
-                    title="50"
+                    title={this.state.totalAlert.toString()}
                     textAlign="center"
                     titleColor="default"
                     description={
                       <EuiTextColor color="default">
-                        <span>
-                          <EuiIcon type="clock" color="accent" /> 100%
-                        </span>
                       </EuiTextColor>
                     }
                   >
@@ -72,14 +200,30 @@ export class StatusUI extends Component {
               <EuiFlexGroup>
                 <EuiFlexItem>
                   <EuiStat
-                    title="50"
+                    title={this.state.failedAlert.toString()}
                     textAlign="center"
                     titleColor="success"
                     description={
                       <EuiTextColor color="success">
-                        <span>
-                          <EuiIcon type="clock" color="success" /> 70,29%
-                        </span>
+                      </EuiTextColor>
+                    }
+                  >
+                    Successful Alerts
+                  </EuiStat>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+            </EuiPanel>
+          </EuiFlexItem>
+          <EuiFlexItem>
+            <EuiPanel hasBorder={true}>
+              <EuiFlexGroup>
+                <EuiFlexItem>
+                  <EuiStat
+                    title={this.state.failedAlert.toString()}
+                    textAlign="center"
+                    titleColor="danger"
+                    description={
+                      <EuiTextColor color="danger">
                       </EuiTextColor>
                     }
                   >

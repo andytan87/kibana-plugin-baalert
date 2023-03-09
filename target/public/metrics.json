@@ -2,18 +2,18 @@
   {
     "group": "@kbn/optimizer bundle module count",
     "id": "baalert",
-    "value": 2111
+    "value": 92
   },
   {
     "group": "page load bundle size",
     "id": "baalert",
-    "value": 37718,
+    "value": 37429,
     "limitConfigPath": "node_modules/@kbn/optimizer/limits.yml"
   },
   {
     "group": "async chunks size",
     "id": "baalert",
-    "value": 6009958
+    "value": 374079
   },
   {
     "group": "async chunk count",

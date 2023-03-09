@@ -10,6 +10,14 @@ export async function analyze(params) {
   return await httpClient.post('/api/analyze_api_ui/analyze', {body: JSON.stringify(params)});
 }
 
-export async function multiAnalyze(params) {
-  return await httpClient.post('/api/analyze_api_ui/multi_analyze', {body: JSON.stringify(params)});
+export async function getFailedAlerts() {
+  return await httpClient.post('/api/baalert/failed');
+}
+
+export async function getSuccessfullAlerts() {
+  return await httpClient.post('/api/baalert/successfull');
+}
+
+export async function getTotalAlerts() {
+  return await httpClient.post('/api/baalert/total');
 }
