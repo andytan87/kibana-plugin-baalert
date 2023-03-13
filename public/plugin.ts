@@ -3,6 +3,11 @@ import { AppMountParameters, CoreSetup, CoreStart, Plugin } from '../../../src/c
 import { BaalertPluginSetup, BaalertPluginStart, AppPluginStartDependencies } from './types';
 import { PLUGIN_NAME } from '../common';
 
+import {
+  setToasts,
+} from './kibana-services';
+
+
 export class BaalertPlugin implements Plugin<BaalertPluginSetup, BaalertPluginStart> {
   public setup(core: CoreSetup): BaalertPluginSetup {
     // Register an application into the side navigation menu
@@ -33,6 +38,8 @@ export class BaalertPlugin implements Plugin<BaalertPluginSetup, BaalertPluginSt
   }
 
   public start(core: CoreStart): BaalertPluginStart {
+    setToasts(core.notifications.toasts);
+    let mantap = core.http.basePath;
     return {};
   }
 

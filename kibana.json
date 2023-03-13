@@ -9,7 +9,7 @@
   "description": "Alerting Frontend Plugin",
   "server": true,
   "ui": true,
-  "requiredPlugins": ["navigation"],
+  "requiredPlugins": ["navigation","kibanaUtils"],
   "optionalPlugins": [],
   "configPath": ["baalert"] 
 }

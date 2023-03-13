@@ -43,11 +43,9 @@ export class Rules extends Component {
   }
 
   componentDidMount() {
-    console.log("mantapgan")
-    axios.get('http://localhost:3000/rules/' + this.props.rule_dir)
+    axios.get(`../api/elastalert/rules/` + this.props.rule_dir)
       .then(res => {
-        this.setState({ rules: res.data.rules });
-        console.log(res.data.rules)
+        this.setState({ rules: res.data.data.rules });
       }).catch(error => {
         console.log(error);
       });
@@ -119,7 +117,6 @@ export class Rules extends Component {
       actions
     },
     ];
-
 
 
     const store = this.state.rules;

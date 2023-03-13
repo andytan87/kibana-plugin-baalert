@@ -32,7 +32,7 @@ export class BaalertPlugin implements Plugin<BaalertPluginSetup, BaalertPluginSt
     this.logger.debug('baalert: Setup');
     const router = core.http.createRouter();
 
-
+    
   
     
 
@@ -44,7 +44,6 @@ export class BaalertPlugin implements Plugin<BaalertPluginSetup, BaalertPluginSt
 
   public async start(core: CoreStart) {
     // const globalConfiguration: SharedGlobalConfig = await this.initializerContext.config.legacy.globalConfig$.pipe(first()).toPromise();
-   
 
     // const contextServer = {
     //   config: globalConfiguration

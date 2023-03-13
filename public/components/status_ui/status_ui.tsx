@@ -171,8 +171,8 @@ export class StatusUI extends Component {
   }
 
   componentDidMount() {
-    setInterval(() => this.totalAlerts(), 1000);
-    setInterval(() => this.failedAlerts(), 1000);
+    setInterval(() => this.totalAlerts(), 10000);
+    setInterval(() => this.failedAlerts(), 10000);
 
   }
 

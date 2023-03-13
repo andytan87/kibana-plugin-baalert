@@ -223,7 +223,7 @@ __webpack_require__(/*! ../../../../../../../../../../../private/var/tmp/_bazel_
 var ___CSS_LOADER_API_IMPORT___ = __webpack_require__(/*! ../../../node_modules/css-loader/dist/runtime/api.js */ "../../node_modules/css-loader/dist/runtime/api.js");
 exports = ___CSS_LOADER_API_IMPORT___(true);
 // Module
-exports.push([module.i, "/**\n * 1. Focus rings shouldn't be visible on scrollable regions, but a11y requires them to be focusable.\n *    Browser's supporting `:focus-visible` will still show outline on keyboard focus only.\n *    Others like Safari, won't show anything at all.\n * 2. Force the `:focus-visible` when the `tabindex=0` (is tabbable)\n */\n/*\n * Creates the Amsterdam style of button with a transparent background\n */\n/*\n * Creates the Amsterdam style of fill button\n */\n", "",{"version":3,"sources":["index.scss"],"names":[],"mappings":"AAAA;;;;;EAKE;AACF;;EAEE;AACF;;EAEE","file":"index.scss","sourcesContent":["/**\n * 1. Focus rings shouldn't be visible on scrollable regions, but a11y requires them to be focusable.\n *    Browser's supporting `:focus-visible` will still show outline on keyboard focus only.\n *    Others like Safari, won't show anything at all.\n * 2. Force the `:focus-visible` when the `tabindex=0` (is tabbable)\n */\n/*\n * Creates the Amsterdam style of button with a transparent background\n */\n/*\n * Creates the Amsterdam style of fill button\n */\n"]}]);
+exports.push([module.i, "/**\n * 1. Focus rings shouldn't be visible on scrollable regions, but a11y requires them to be focusable.\n *    Browser's supporting `:focus-visible` will still show outline on keyboard focus only.\n *    Others like Safari, won't show anything at all.\n * 2. Force the `:focus-visible` when the `tabindex=0` (is tabbable)\n */\n/*\n * Creates the Amsterdam style of button with a transparent background\n */\n/*\n * Creates the Amsterdam style of fill button\n */\nbody {\n  background-color: black;\n  overflow-y: scroll; }\n\n#background {\n  left: 0px;\n  right: 0px;\n  width: 100%;\n  height: 50%;\n  background-color: black;\n  margin: 0px;\n  padding: 0px; }\n\n#console {\n  margin: 0px;\n  padding: 0px; }\n\n#consoletext {\n  color: white;\n  font-family: Monospace;\n  margin: 10px 0px 0px 10px; }\n", "",{"version":3,"sources":["index.scss"],"names":[],"mappings":"AAAA;;;;;EAKE;AACF;;EAEE;AACF;;EAEE;AACF;EACE,uBAAuB;EACvB,kBAAkB,EAAE;;AAEtB;EACE,SAAS;EACT,UAAU;EACV,WAAW;EACX,WAAW;EACX,uBAAuB;EACvB,WAAW;EACX,YAAY,EAAE;;AAEhB;EACE,WAAW;EACX,YAAY,EAAE;;AAEhB;EACE,YAAY;EACZ,sBAAsB;EACtB,yBAAyB,EAAE","file":"index.scss","sourcesContent":["/**\n * 1. Focus rings shouldn't be visible on scrollable regions, but a11y requires them to be focusable.\n *    Browser's supporting `:focus-visible` will still show outline on keyboard focus only.\n *    Others like Safari, won't show anything at all.\n * 2. Force the `:focus-visible` when the `tabindex=0` (is tabbable)\n */\n/*\n * Creates the Amsterdam style of button with a transparent background\n */\n/*\n * Creates the Amsterdam style of fill button\n */\nbody {\n  background-color: black;\n  overflow-y: scroll; }\n\n#background {\n  left: 0px;\n  right: 0px;\n  width: 100%;\n  height: 50%;\n  background-color: black;\n  margin: 0px;\n  padding: 0px; }\n\n#console {\n  margin: 0px;\n  padding: 0px; }\n\n#consoletext {\n  color: white;\n  font-family: Monospace;\n  margin: 10px 0px 0px 10px; }\n"]}]);
 // Exports
 module.exports = exports;
 
@@ -241,7 +241,7 @@ module.exports = exports;
 var ___CSS_LOADER_API_IMPORT___ = __webpack_require__(/*! ../../../node_modules/css-loader/dist/runtime/api.js */ "../../node_modules/css-loader/dist/runtime/api.js");
 exports = ___CSS_LOADER_API_IMPORT___(true);
 // Module
-exports.push([module.i, "/**\n * 1. Focus rings shouldn't be visible on scrollable regions, but a11y requires them to be focusable.\n *    Browser's supporting `:focus-visible` will still show outline on keyboard focus only.\n *    Others like Safari, won't show anything at all.\n * 2. Force the `:focus-visible` when the `tabindex=0` (is tabbable)\n */\n/*\n * Creates the Amsterdam style of button with a transparent background\n */\n/*\n * Creates the Amsterdam style of fill button\n */\n", "",{"version":3,"sources":["index.scss"],"names":[],"mappings":"AAAA;;;;;EAKE;AACF;;EAEE;AACF;;EAEE","file":"index.scss","sourcesContent":["/**\n * 1. Focus rings shouldn't be visible on scrollable regions, but a11y requires them to be focusable.\n *    Browser's supporting `:focus-visible` will still show outline on keyboard focus only.\n *    Others like Safari, won't show anything at all.\n * 2. Force the `:focus-visible` when the `tabindex=0` (is tabbable)\n */\n/*\n * Creates the Amsterdam style of button with a transparent background\n */\n/*\n * Creates the Amsterdam style of fill button\n */\n"]}]);
+exports.push([module.i, "/**\n * 1. Focus rings shouldn't be visible on scrollable regions, but a11y requires them to be focusable.\n *    Browser's supporting `:focus-visible` will still show outline on keyboard focus only.\n *    Others like Safari, won't show anything at all.\n * 2. Force the `:focus-visible` when the `tabindex=0` (is tabbable)\n */\n/*\n * Creates the Amsterdam style of button with a transparent background\n */\n/*\n * Creates the Amsterdam style of fill button\n */\nbody {\n  background-color: black;\n  overflow-y: scroll; }\n\n#background {\n  left: 0px;\n  right: 0px;\n  width: 100%;\n  height: 50%;\n  background-color: black;\n  margin: 0px;\n  padding: 0px; }\n\n#console {\n  margin: 0px;\n  padding: 0px; }\n\n#consoletext {\n  color: white;\n  font-family: Monospace;\n  margin: 10px 0px 0px 10px; }\n", "",{"version":3,"sources":["index.scss"],"names":[],"mappings":"AAAA;;;;;EAKE;AACF;;EAEE;AACF;;EAEE;AACF;EACE,uBAAuB;EACvB,kBAAkB,EAAE;;AAEtB;EACE,SAAS;EACT,UAAU;EACV,WAAW;EACX,WAAW;EACX,uBAAuB;EACvB,WAAW;EACX,YAAY,EAAE;;AAEhB;EACE,WAAW;EACX,YAAY,EAAE;;AAEhB;EACE,YAAY;EACZ,sBAAsB;EACtB,yBAAyB,EAAE","file":"index.scss","sourcesContent":["/**\n * 1. Focus rings shouldn't be visible on scrollable regions, but a11y requires them to be focusable.\n *    Browser's supporting `:focus-visible` will still show outline on keyboard focus only.\n *    Others like Safari, won't show anything at all.\n * 2. Force the `:focus-visible` when the `tabindex=0` (is tabbable)\n */\n/*\n * Creates the Amsterdam style of button with a transparent background\n */\n/*\n * Creates the Amsterdam style of fill button\n */\nbody {\n  background-color: black;\n  overflow-y: scroll; }\n\n#background {\n  left: 0px;\n  right: 0px;\n  width: 100%;\n  height: 50%;\n  background-color: black;\n  margin: 0px;\n  padding: 0px; }\n\n#console {\n  margin: 0px;\n  padding: 0px; }\n\n#consoletext {\n  color: white;\n  font-family: Monospace;\n  margin: 10px 0px 0px 10px; }\n"]}]);
 // Exports
 module.exports = exports;
 
@@ -773,6 +773,24 @@ function plugin() {
 
 /***/ }),
 
+/***/ "./public/kibana-services.ts":
+/*!***********************************!*\
+  !*** ./public/kibana-services.ts ***!
+  \***********************************/
+/*! exports provided: getToasts, setToasts */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getToasts", function() { return getToasts; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "setToasts", function() { return setToasts; });
+/* harmony import */ var _src_plugins_kibana_utils_common__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../../../src/plugins/kibana_utils/common */ "plugin/kibanaUtils/common");
+/* harmony import */ var _src_plugins_kibana_utils_common__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_src_plugins_kibana_utils_common__WEBPACK_IMPORTED_MODULE_0__);
+
+const [getToasts, setToasts] = Object(_src_plugins_kibana_utils_common__WEBPACK_IMPORTED_MODULE_0__["createGetterSetter"])('Toasts');
+
+/***/ }),
+
 /***/ "./public/plugin.ts":
 /*!**************************!*\
   !*** ./public/plugin.ts ***!
@@ -786,6 +804,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _kbn_i18n__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @kbn/i18n */ "@kbn/i18n");
 /* harmony import */ var _kbn_i18n__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_kbn_i18n__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _common__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../common */ "./common/index.ts");
+/* harmony import */ var _kibana_services__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./kibana-services */ "./public/kibana-services.ts");
+
 
 
 class BaalertPlugin {
@@ -822,6 +842,8 @@ class BaalertPlugin {
   }
 
   start(core) {
+    Object(_kibana_services__WEBPACK_IMPORTED_MODULE_2__["setToasts"])(core.notifications.toasts);
+    let mantap = core.http.basePath;
     return {};
   }
 
@@ -907,6 +929,21 @@ module.exports = __kbnSharedDeps_npm__;
 /***/ (function(module, exports) {
 
 module.exports = __kbnSharedDeps__.Lodash;
+
+/***/ }),
+
+/***/ "plugin/kibanaUtils/common":
+/*!**************************************************!*\
+  !*** @kbn/bundleRef "plugin/kibanaUtils/common" ***!
+  \**************************************************/
+/*! no static exports found */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+
+      __webpack_require__.r(__webpack_exports__);
+      var ns = __kbnBundles__.get('plugin/kibanaUtils/common');
+      Object.defineProperties(__webpack_exports__, Object.getOwnPropertyDescriptors(ns))
+    
 
 /***/ }),
 

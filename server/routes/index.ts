@@ -2,6 +2,8 @@ import { IRouter } from '../../../../src/core/server';
 import fetch from "node-fetch";
 import { Config } from '@kbn/config';
 
+import { schema } from '@kbn/config-schema';
+
 export function defineRoutes(router: IRouter, config: Config) {
 
 
@@ -26,11 +28,119 @@ export function defineRoutes(router: IRouter, config: Config) {
       validate: false,
     },
     async (context, req, res) => {
+      // console.log(config.url);
       const response = await fetch(config.url + '/rules');
       const result = await response.json();
       return res.ok({
         body: {
           directories: result.directories,
+        },
+      });
+    }
+  );
+
+  router.get(
+    {
+      path: '/api/elastalert/rules/{team}',
+      validate: {
+        params: schema.object({
+          team: schema.string()
+        }),
+      },
+    },
+    async (context, req, res) => {
+      const response = await fetch(config.url + '/rules' + '/' + req.params.team);
+      const result = await response.json();
+      console.log(result);
+      return res.ok({
+        body: {
+          data: result,
+        },
+      });
+    }
+  );
+
+  router.post(
+    {
+      path: '/api/elastalert/stream/{team}/{rule}',
+      validate: {
+        params: schema.object({
+          team: schema.string(),
+          rule: schema.string()
+        }),
+        body: schema.object({
+          yaml: schema.string()
+        }),
+      }
+    },
+    async (context, req, res) => {
+      const response = await fetch(
+        config.url + '/stream/' + req.params.team + '/' + req.params.rule,
+        {
+          method: 'post',
+          body: JSON.stringify(req.body),
+          headers: {'Content-Type': 'application/json'}
+        }
+      );
+      const result = await response.text();
+      console.log("result");
+      console.log(result);
+      return res.ok({
+        body: {
+          data: result,
+        },
+      });
+    }
+  );
+
+  
+  router.get(
+    {
+      path: '/api/elastalert/containerstatus',
+      validate: false,
+    },
+    async (context, req, res) => {
+      const response = await fetch(config.url + '/container-status');
+      const result = await response.json();
+      console.log(result)
+      return res.ok({
+        body: {
+          data: result.results,
+        },
+      });
+    }
+  );
+
+
+  router.post(
+    {
+      path: '/api/elastalert/rules/{team}/{rule}',
+      validate: {
+        params: schema.object({
+          team: schema.string(),
+          rule: schema.string()
+        }),
+        body: schema.object({
+          yaml: schema.string()
+        }),
+      }
+    },
+    async (context, req, res) => {
+      console.log("test");
+      console.log(req.params);
+      console.log(req.body)
+      const response = await fetch(
+        config.url + '/rules/' + req.params.team + '/' + req.params.rule,
+        {
+          method: 'post',
+          body: JSON.stringify(req.body),
+          headers: {'Content-Type': 'application/json'}
+        }
+      );
+      const result = await response;
+      return res.ok({
+        body: {
+          directories: "good",
         },
       });
     }

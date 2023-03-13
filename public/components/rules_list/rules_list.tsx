@@ -17,7 +17,9 @@ import {
     EuiCallOut,
     EuiLoadingChart,
     EuiInMemoryTable,
+    EuiButton,
     EuiDescriptionList,
+    EuiHorizontalRule,
     EuiBasicTable,
     LEFT_ALIGNMENT,
     CENTER_ALIGNMENT
@@ -27,6 +29,8 @@ import {
 import { RIGHT_ALIGNMENT } from '@elastic/eui/lib/services';
 
 import { Rules } from "../rules";
+
+import { Editor } from "../editor";
 
 import { METHODS } from 'http';
 
@@ -44,42 +48,137 @@ export class RulesList extends React.Component {
             errorMessage: '',
             reloadTable: '',
             itemIdToExpandedRowMap: {},
+            container_list: [],
         };
 
 
 
-        // this.updateTableOnSave = this.updateTableOnSave.bind(this)
+        this.loadTeams = this.loadTeams.bind(this);
     };
 
 
-    // updateTableOnSave() {
-    //     this.setState({ reloadTable: 'yes' })
-    // }
+    updateTableOnSave() {
+        this.setState({ reloadTable: 'yes' })
+    }
+
+    get_online_status(container_status) {
+        
+        let result = false;
+        let container_name = 'elastalert-' + container_status.toLowerCase().replace("_","-")
+
+
+
+        console.log("container name" + container_name)
+
+        for (const container of this.state.container_list.keys()) {
+
+            console.log(this.state.container_list[container])
+            console.log(container_name in this.state.container_list[container])
+            if (container_name in this.state.container_list[container] === true) {
+                console.log("yay ture")
+                result = this.state.container_list[container][container_name]
+            } 
+            else {
+                console.log("yay false")
+            }
+
+
+        }
+
+        return result
+
+    };
 
     create_dictionary(rules) {
         const list = []
-        console.log(rules)
         for (const test of rules.keys()) {
-            list.push({ id: test, ruleName: rules[test], online: true })
+            console.log("mantaptest")
+
+            console.log("rules " + rules[test])
+
+            let container_status = this.get_online_status(rules[test])
+            console.log("container status " + container_status)
+
+            list.push({ id: test, ruleName: rules[test], online: container_status })
         }
 
         return list
+    };
+
+
+    async getUserAccount() {
+        await axios.get(`../api/elastalert/containerstatus`, { httpsAgent: agent })
+            .then(res => {
+                console.log(res.data.data)
+                let container_list = res.data.data.sort();
+
+                this.setState({ container_list });
+                console.log(this.state.container_list)
+            }).catch((err) => {
+                const errorMessage = err;
+                this.setState({ errorMessage })
+            });
     }
 
-    componentDidMount() {
-        console.log("huahuahua")
-        axios.get(`../api/baalert/test`, { httpsAgent: agent })
+    async getUserPermissions() {
+        await axios.get(`../api/baalert/test`, { httpsAgent: agent })
             .then(res => {
                 let rules_list = res.data.directories.sort();
                 rules_list = this.create_dictionary(rules_list);
+
                 this.setState({ rules_list });
             }).catch((err) => {
                 const errorMessage = err;
                 this.setState({ errorMessage })
             });
+    }
 
-        // const rules_list = ["test"];
-        // this.setState({ rules_list });
+
+    async componentDidMount() {
+
+        // axios.get(`../api/elastalert/containerstatus`, { httpsAgent: agent })
+        //     .then(res => {
+        //         console.log(res.data.data)
+        //         let container_list = res.data.data.sort();
+
+        //         this.setState({ container_list });
+        //         console.log(this.state.container_list)
+        //     }).catch((err) => {
+        //         const errorMessage = err;
+        //         this.setState({ errorMessage })
+        //     });
+
+        axios.get(`../api/elastalert/containerstatus`, { httpsAgent: agent })
+            .then(res => {
+                console.log(res.data.data)
+                let container_list = res.data.data.sort();
+
+                this.setState({ container_list });
+                console.log(this.state.container_list)
+                return axios.get(`../api/baalert/test`, { httpsAgent: agent })
+                    .then(res => {
+
+                        let rules_list = res.data.directories.sort();
+                        rules_list = this.create_dictionary(rules_list);
+
+                        this.setState({ rules_list });
+                        return
+                    }).catch((err) => {
+                        const errorMessage = err;
+                        this.setState({ errorMessage })
+                    });
+
+            }).catch((err) => {
+                const errorMessage = err;
+                this.setState({ errorMessage })
+            });
+
+
+
+        // axios.all([this.getUserAccount(), this.getUserPermissions()])
+        //     .then(axios.spread(function (acct, perms) {
+        //         // Both requests are now complete
+        //     }));
     }
 
     buttonContent = test => {
@@ -87,7 +186,6 @@ export class RulesList extends React.Component {
     };
 
     toggleDetails = item => {
-        console.log(item)
         const itemIdToExpandedRowMapValues = this.state.itemIdToExpandedRowMap;
         console.log(itemIdToExpandedRowMapValues)
         if (itemIdToExpandedRowMapValues[item.id]) {
@@ -118,10 +216,35 @@ export class RulesList extends React.Component {
         this.setState(itemIdToExpandedRowMapValues);
     };
 
+    loadTeams = () => {
+        axios.get(`../api/baalert/test`, { httpsAgent: agent })
+            .then(res => {
+                let rules_list = res.data.directories.sort();
+                rules_list = this.create_dictionary(rules_list);
+                this.setState({ rules_list });
+            }).catch((err) => {
+                const errorMessage = err;
+                this.setState({ errorMessage })
+            });
+    };
 
     render() {
 
+
+
+        const renderToolsRight = () => {
+            return [
+                <EuiButton
+                    key="loadUsers"
+                    onClick={this.loadTeams}
+                >
+                    Load Teams
+                </EuiButton>
+            ];
+        };
+
         const search = {
+            toolsRight: renderToolsRight(),
             onChange: this.onQueryChange,
             box: {
                 incremental: true,
@@ -136,27 +259,6 @@ export class RulesList extends React.Component {
             type: 'icon',
             onClick: this.buttonContent,
         }];
-
-
-
-        // const items = [{
-        //     id: '1',
-        //     ruleName: 'OPS1-ELK',
-        //     "lastName": 'doe',
-        //     "github": 'johndoe',
-        //     "dateOfBirth": "2020-01-01",
-        //     "nationality": 'NL',
-        //     "online": 'true'
-        //   },
-        //   {
-        //     id: '2',
-        //     ruleName: 'test',
-        //     "lastName": 'doe',
-        //     "github": 'johndoe',
-        //     "dateOfBirth": "2020-01-01",
-        //     "nationality": 'NL',
-        //     "online": 'true'
-        //   }]
 
         const items = this.state.rules_list;
 
@@ -202,10 +304,6 @@ export class RulesList extends React.Component {
         ];
 
 
-
-
-
-
         if (this.state.errorMessage) {
             return (
                 <div>
@@ -241,21 +339,35 @@ export class RulesList extends React.Component {
         if (!this.state.errorMessage && this.state.rules_list.length > 0) {
             return (
                 <Fragment>
-                    <EuiTitle>
-                        <h2>Rules</h2>
-                    </EuiTitle>
-                    <br></br>
-                    <EuiInMemoryTable
-                        itemId="id"
-                        items={items}
-                        columns={columns}
-                        hasActions={true}
-                        search={search}
-                        responsive={true}
-                        tableLayout='auto'
-                        isExpandable={true}
-                        itemIdToExpandedRowMap={this.state.itemIdToExpandedRowMap}
-                    />
+                    <EuiPageContent>
+                        <EuiPageContentHeader>
+                            <EuiPageContentHeaderSection>
+                                <EuiTitle>
+                                    <h2>Rules</h2>
+                                </EuiTitle>
+                            </EuiPageContentHeaderSection>
+                            <EuiPageContentHeaderSection>
+                                <Editor editorMode="create" loadTeams={() => this.loadTeams()} />
+                            </EuiPageContentHeaderSection>
+                        </EuiPageContentHeader>
+                        <EuiHorizontalRule />
+                        <EuiPageContentBody>
+                            <EuiInMemoryTable
+                                itemId="id"
+                                items={items}
+                                columns={columns}
+                                hasActions={true}
+                                search={search}
+                                sorting={true}
+                                responsive={true}
+                                tableLayout='auto'
+                                isExpandable={true}
+                                pagination={true}
+                                itemIdToExpandedRowMap={this.state.itemIdToExpandedRowMap}
+                            />
+                            <br></br>
+                        </EuiPageContentBody>
+                    </EuiPageContent>
 
                 </Fragment>
 

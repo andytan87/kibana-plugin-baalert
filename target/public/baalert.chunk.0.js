@@ -2670,6 +2670,2389 @@ function fromByteArray (uint8) {
 
 /***/ }),
 
+/***/ "../../node_modules/brace/ext/language_tools.js":
+/*!*******************************************************************************!*\
+  !*** /Users/andy/Dev/Work/BA/kibana/node_modules/brace/ext/language_tools.js ***!
+  \*******************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+ace.define("ace/snippets",["require","exports","module","ace/lib/oop","ace/lib/event_emitter","ace/lib/lang","ace/range","ace/anchor","ace/keyboard/hash_handler","ace/tokenizer","ace/lib/dom","ace/editor"], function(acequire, exports, module) {
+"use strict";
+var oop = acequire("./lib/oop");
+var EventEmitter = acequire("./lib/event_emitter").EventEmitter;
+var lang = acequire("./lib/lang");
+var Range = acequire("./range").Range;
+var Anchor = acequire("./anchor").Anchor;
+var HashHandler = acequire("./keyboard/hash_handler").HashHandler;
+var Tokenizer = acequire("./tokenizer").Tokenizer;
+var comparePoints = Range.comparePoints;
+
+var SnippetManager = function() {
+    this.snippetMap = {};
+    this.snippetNameMap = {};
+};
+
+(function() {
+    oop.implement(this, EventEmitter);
+    
+    this.getTokenizer = function() {
+        function TabstopToken(str, _, stack) {
+            str = str.substr(1);
+            if (/^\d+$/.test(str) && !stack.inFormatString)
+                return [{tabstopId: parseInt(str, 10)}];
+            return [{text: str}];
+        }
+        function escape(ch) {
+            return "(?:[^\\\\" + ch + "]|\\\\.)";
+        }
+        SnippetManager.$tokenizer = new Tokenizer({
+            start: [
+                {regex: /:/, onMatch: function(val, state, stack) {
+                    if (stack.length && stack[0].expectIf) {
+                        stack[0].expectIf = false;
+                        stack[0].elseBranch = stack[0];
+                        return [stack[0]];
+                    }
+                    return ":";
+                }},
+                {regex: /\\./, onMatch: function(val, state, stack) {
+                    var ch = val[1];
+                    if (ch == "}" && stack.length) {
+                        val = ch;
+                    }else if ("`$\\".indexOf(ch) != -1) {
+                        val = ch;
+                    } else if (stack.inFormatString) {
+                        if (ch == "n")
+                            val = "\n";
+                        else if (ch == "t")
+                            val = "\n";
+                        else if ("ulULE".indexOf(ch) != -1) {
+                            val = {changeCase: ch, local: ch > "a"};
+                        }
+                    }
+
+                    return [val];
+                }},
+                {regex: /}/, onMatch: function(val, state, stack) {
+                    return [stack.length ? stack.shift() : val];
+                }},
+                {regex: /\$(?:\d+|\w+)/, onMatch: TabstopToken},
+                {regex: /\$\{[\dA-Z_a-z]+/, onMatch: function(str, state, stack) {
+                    var t = TabstopToken(str.substr(1), state, stack);
+                    stack.unshift(t[0]);
+                    return t;
+                }, next: "snippetVar"},
+                {regex: /\n/, token: "newline", merge: false}
+            ],
+            snippetVar: [
+                {regex: "\\|" + escape("\\|") + "*\\|", onMatch: function(val, state, stack) {
+                    stack[0].choices = val.slice(1, -1).split(",");
+                }, next: "start"},
+                {regex: "/(" + escape("/") + "+)/(?:(" + escape("/") + "*)/)(\\w*):?",
+                 onMatch: function(val, state, stack) {
+                    var ts = stack[0];
+                    ts.fmtString = val;
+
+                    val = this.splitRegex.exec(val);
+                    ts.guard = val[1];
+                    ts.fmt = val[2];
+                    ts.flag = val[3];
+                    return "";
+                }, next: "start"},
+                {regex: "`" + escape("`") + "*`", onMatch: function(val, state, stack) {
+                    stack[0].code = val.splice(1, -1);
+                    return "";
+                }, next: "start"},
+                {regex: "\\?", onMatch: function(val, state, stack) {
+                    if (stack[0])
+                        stack[0].expectIf = true;
+                }, next: "start"},
+                {regex: "([^:}\\\\]|\\\\.)*:?", token: "", next: "start"}
+            ],
+            formatString: [
+                {regex: "/(" + escape("/") + "+)/", token: "regex"},
+                {regex: "", onMatch: function(val, state, stack) {
+                    stack.inFormatString = true;
+                }, next: "start"}
+            ]
+        });
+        SnippetManager.prototype.getTokenizer = function() {
+            return SnippetManager.$tokenizer;
+        };
+        return SnippetManager.$tokenizer;
+    };
+
+    this.tokenizeTmSnippet = function(str, startState) {
+        return this.getTokenizer().getLineTokens(str, startState).tokens.map(function(x) {
+            return x.value || x;
+        });
+    };
+
+    this.$getDefaultValue = function(editor, name) {
+        if (/^[A-Z]\d+$/.test(name)) {
+            var i = name.substr(1);
+            return (this.variables[name[0] + "__"] || {})[i];
+        }
+        if (/^\d+$/.test(name)) {
+            return (this.variables.__ || {})[name];
+        }
+        name = name.replace(/^TM_/, "");
+
+        if (!editor)
+            return;
+        var s = editor.session;
+        switch(name) {
+            case "CURRENT_WORD":
+                var r = s.getWordRange();
+            case "SELECTION":
+            case "SELECTED_TEXT":
+                return s.getTextRange(r);
+            case "CURRENT_LINE":
+                return s.getLine(editor.getCursorPosition().row);
+            case "PREV_LINE": // not possible in textmate
+                return s.getLine(editor.getCursorPosition().row - 1);
+            case "LINE_INDEX":
+                return editor.getCursorPosition().column;
+            case "LINE_NUMBER":
+                return editor.getCursorPosition().row + 1;
+            case "SOFT_TABS":
+                return s.getUseSoftTabs() ? "YES" : "NO";
+            case "TAB_SIZE":
+                return s.getTabSize();
+            case "FILENAME":
+            case "FILEPATH":
+                return "";
+            case "FULLNAME":
+                return "Ace";
+        }
+    };
+    this.variables = {};
+    this.getVariableValue = function(editor, varName) {
+        if (this.variables.hasOwnProperty(varName))
+            return this.variables[varName](editor, varName) || "";
+        return this.$getDefaultValue(editor, varName) || "";
+    };
+    this.tmStrFormat = function(str, ch, editor) {
+        var flag = ch.flag || "";
+        var re = ch.guard;
+        re = new RegExp(re, flag.replace(/[^gi]/, ""));
+        var fmtTokens = this.tokenizeTmSnippet(ch.fmt, "formatString");
+        var _self = this;
+        var formatted = str.replace(re, function() {
+            _self.variables.__ = arguments;
+            var fmtParts = _self.resolveVariables(fmtTokens, editor);
+            var gChangeCase = "E";
+            for (var i  = 0; i < fmtParts.length; i++) {
+                var ch = fmtParts[i];
+                if (typeof ch == "object") {
+                    fmtParts[i] = "";
+                    if (ch.changeCase && ch.local) {
+                        var next = fmtParts[i + 1];
+                        if (next && typeof next == "string") {
+                            if (ch.changeCase == "u")
+                                fmtParts[i] = next[0].toUpperCase();
+                            else
+                                fmtParts[i] = next[0].toLowerCase();
+                            fmtParts[i + 1] = next.substr(1);
+                        }
+                    } else if (ch.changeCase) {
+                        gChangeCase = ch.changeCase;
+                    }
+                } else if (gChangeCase == "U") {
+                    fmtParts[i] = ch.toUpperCase();
+                } else if (gChangeCase == "L") {
+                    fmtParts[i] = ch.toLowerCase();
+                }
+            }
+            return fmtParts.join("");
+        });
+        this.variables.__ = null;
+        return formatted;
+    };
+
+    this.resolveVariables = function(snippet, editor) {
+        var result = [];
+        for (var i = 0; i < snippet.length; i++) {
+            var ch = snippet[i];
+            if (typeof ch == "string") {
+                result.push(ch);
+            } else if (typeof ch != "object") {
+                continue;
+            } else if (ch.skip) {
+                gotoNext(ch);
+            } else if (ch.processed < i) {
+                continue;
+            } else if (ch.text) {
+                var value = this.getVariableValue(editor, ch.text);
+                if (value && ch.fmtString)
+                    value = this.tmStrFormat(value, ch);
+                ch.processed = i;
+                if (ch.expectIf == null) {
+                    if (value) {
+                        result.push(value);
+                        gotoNext(ch);
+                    }
+                } else {
+                    if (value) {
+                        ch.skip = ch.elseBranch;
+                    } else
+                        gotoNext(ch);
+                }
+            } else if (ch.tabstopId != null) {
+                result.push(ch);
+            } else if (ch.changeCase != null) {
+                result.push(ch);
+            }
+        }
+        function gotoNext(ch) {
+            var i1 = snippet.indexOf(ch, i + 1);
+            if (i1 != -1)
+                i = i1;
+        }
+        return result;
+    };
+
+    this.insertSnippetForSelection = function(editor, snippetText) {
+        var cursor = editor.getCursorPosition();
+        var line = editor.session.getLine(cursor.row);
+        var tabString = editor.session.getTabString();
+        var indentString = line.match(/^\s*/)[0];
+        
+        if (cursor.column < indentString.length)
+            indentString = indentString.slice(0, cursor.column);
+
+        snippetText = snippetText.replace(/\r/g, "");
+        var tokens = this.tokenizeTmSnippet(snippetText);
+        tokens = this.resolveVariables(tokens, editor);
+        tokens = tokens.map(function(x) {
+            if (x == "\n")
+                return x + indentString;
+            if (typeof x == "string")
+                return x.replace(/\t/g, tabString);
+            return x;
+        });
+        var tabstops = [];
+        tokens.forEach(function(p, i) {
+            if (typeof p != "object")
+                return;
+            var id = p.tabstopId;
+            var ts = tabstops[id];
+            if (!ts) {
+                ts = tabstops[id] = [];
+                ts.index = id;
+                ts.value = "";
+            }
+            if (ts.indexOf(p) !== -1)
+                return;
+            ts.push(p);
+            var i1 = tokens.indexOf(p, i + 1);
+            if (i1 === -1)
+                return;
+
+            var value = tokens.slice(i + 1, i1);
+            var isNested = value.some(function(t) {return typeof t === "object";});
+            if (isNested && !ts.value) {
+                ts.value = value;
+            } else if (value.length && (!ts.value || typeof ts.value !== "string")) {
+                ts.value = value.join("");
+            }
+        });
+        tabstops.forEach(function(ts) {ts.length = 0;});
+        var expanding = {};
+        function copyValue(val) {
+            var copy = [];
+            for (var i = 0; i < val.length; i++) {
+                var p = val[i];
+                if (typeof p == "object") {
+                    if (expanding[p.tabstopId])
+                        continue;
+                    var j = val.lastIndexOf(p, i - 1);
+                    p = copy[j] || {tabstopId: p.tabstopId};
+                }
+                copy[i] = p;
+            }
+            return copy;
+        }
+        for (var i = 0; i < tokens.length; i++) {
+            var p = tokens[i];
+            if (typeof p != "object")
+                continue;
+            var id = p.tabstopId;
+            var i1 = tokens.indexOf(p, i + 1);
+            if (expanding[id]) {
+                if (expanding[id] === p)
+                    expanding[id] = null;
+                continue;
+            }
+            
+            var ts = tabstops[id];
+            var arg = typeof ts.value == "string" ? [ts.value] : copyValue(ts.value);
+            arg.unshift(i + 1, Math.max(0, i1 - i));
+            arg.push(p);
+            expanding[id] = p;
+            tokens.splice.apply(tokens, arg);
+
+            if (ts.indexOf(p) === -1)
+                ts.push(p);
+        }
+        var row = 0, column = 0;
+        var text = "";
+        tokens.forEach(function(t) {
+            if (typeof t === "string") {
+                var lines = t.split("\n");
+                if (lines.length > 1){
+                    column = lines[lines.length - 1].length;
+                    row += lines.length - 1;
+                } else
+                    column += t.length;
+                text += t;
+            } else {
+                if (!t.start)
+                    t.start = {row: row, column: column};
+                else
+                    t.end = {row: row, column: column};
+            }
+        });
+        var range = editor.getSelectionRange();
+        var end = editor.session.replace(range, text);
+
+        var tabstopManager = new TabstopManager(editor);
+        var selectionId = editor.inVirtualSelectionMode && editor.selection.index;
+        tabstopManager.addTabstops(tabstops, range.start, end, selectionId);
+    };
+    
+    this.insertSnippet = function(editor, snippetText) {
+        var self = this;
+        if (editor.inVirtualSelectionMode)
+            return self.insertSnippetForSelection(editor, snippetText);
+        
+        editor.forEachSelection(function() {
+            self.insertSnippetForSelection(editor, snippetText);
+        }, null, {keepOrder: true});
+        
+        if (editor.tabstopManager)
+            editor.tabstopManager.tabNext();
+    };
+
+    this.$getScope = function(editor) {
+        var scope = editor.session.$mode.$id || "";
+        scope = scope.split("/").pop();
+        if (scope === "html" || scope === "php") {
+            if (scope === "php" && !editor.session.$mode.inlinePhp) 
+                scope = "html";
+            var c = editor.getCursorPosition();
+            var state = editor.session.getState(c.row);
+            if (typeof state === "object") {
+                state = state[0];
+            }
+            if (state.substring) {
+                if (state.substring(0, 3) == "js-")
+                    scope = "javascript";
+                else if (state.substring(0, 4) == "css-")
+                    scope = "css";
+                else if (state.substring(0, 4) == "php-")
+                    scope = "php";
+            }
+        }
+        
+        return scope;
+    };
+
+    this.getActiveScopes = function(editor) {
+        var scope = this.$getScope(editor);
+        var scopes = [scope];
+        var snippetMap = this.snippetMap;
+        if (snippetMap[scope] && snippetMap[scope].includeScopes) {
+            scopes.push.apply(scopes, snippetMap[scope].includeScopes);
+        }
+        scopes.push("_");
+        return scopes;
+    };
+
+    this.expandWithTab = function(editor, options) {
+        var self = this;
+        var result = editor.forEachSelection(function() {
+            return self.expandSnippetForSelection(editor, options);
+        }, null, {keepOrder: true});
+        if (result && editor.tabstopManager)
+            editor.tabstopManager.tabNext();
+        return result;
+    };
+    
+    this.expandSnippetForSelection = function(editor, options) {
+        var cursor = editor.getCursorPosition();
+        var line = editor.session.getLine(cursor.row);
+        var before = line.substring(0, cursor.column);
+        var after = line.substr(cursor.column);
+
+        var snippetMap = this.snippetMap;
+        var snippet;
+        this.getActiveScopes(editor).some(function(scope) {
+            var snippets = snippetMap[scope];
+            if (snippets)
+                snippet = this.findMatchingSnippet(snippets, before, after);
+            return !!snippet;
+        }, this);
+        if (!snippet)
+            return false;
+        if (options && options.dryRun)
+            return true;
+        editor.session.doc.removeInLine(cursor.row,
+            cursor.column - snippet.replaceBefore.length,
+            cursor.column + snippet.replaceAfter.length
+        );
+
+        this.variables.M__ = snippet.matchBefore;
+        this.variables.T__ = snippet.matchAfter;
+        this.insertSnippetForSelection(editor, snippet.content);
+
+        this.variables.M__ = this.variables.T__ = null;
+        return true;
+    };
+
+    this.findMatchingSnippet = function(snippetList, before, after) {
+        for (var i = snippetList.length; i--;) {
+            var s = snippetList[i];
+            if (s.startRe && !s.startRe.test(before))
+                continue;
+            if (s.endRe && !s.endRe.test(after))
+                continue;
+            if (!s.startRe && !s.endRe)
+                continue;
+
+            s.matchBefore = s.startRe ? s.startRe.exec(before) : [""];
+            s.matchAfter = s.endRe ? s.endRe.exec(after) : [""];
+            s.replaceBefore = s.triggerRe ? s.triggerRe.exec(before)[0] : "";
+            s.replaceAfter = s.endTriggerRe ? s.endTriggerRe.exec(after)[0] : "";
+            return s;
+        }
+    };
+
+    this.snippetMap = {};
+    this.snippetNameMap = {};
+    this.register = function(snippets, scope) {
+        var snippetMap = this.snippetMap;
+        var snippetNameMap = this.snippetNameMap;
+        var self = this;
+        
+        if (!snippets) 
+            snippets = [];
+        
+        function wrapRegexp(src) {
+            if (src && !/^\^?\(.*\)\$?$|^\\b$/.test(src))
+                src = "(?:" + src + ")";
+
+            return src || "";
+        }
+        function guardedRegexp(re, guard, opening) {
+            re = wrapRegexp(re);
+            guard = wrapRegexp(guard);
+            if (opening) {
+                re = guard + re;
+                if (re && re[re.length - 1] != "$")
+                    re = re + "$";
+            } else {
+                re = re + guard;
+                if (re && re[0] != "^")
+                    re = "^" + re;
+            }
+            return new RegExp(re);
+        }
+
+        function addSnippet(s) {
+            if (!s.scope)
+                s.scope = scope || "_";
+            scope = s.scope;
+            if (!snippetMap[scope]) {
+                snippetMap[scope] = [];
+                snippetNameMap[scope] = {};
+            }
+
+            var map = snippetNameMap[scope];
+            if (s.name) {
+                var old = map[s.name];
+                if (old)
+                    self.unregister(old);
+                map[s.name] = s;
+            }
+            snippetMap[scope].push(s);
+
+            if (s.tabTrigger && !s.trigger) {
+                if (!s.guard && /^\w/.test(s.tabTrigger))
+                    s.guard = "\\b";
+                s.trigger = lang.escapeRegExp(s.tabTrigger);
+            }
+            
+            if (!s.trigger && !s.guard && !s.endTrigger && !s.endGuard)
+                return;
+            
+            s.startRe = guardedRegexp(s.trigger, s.guard, true);
+            s.triggerRe = new RegExp(s.trigger, "", true);
+
+            s.endRe = guardedRegexp(s.endTrigger, s.endGuard, true);
+            s.endTriggerRe = new RegExp(s.endTrigger, "", true);
+        }
+
+        if (snippets && snippets.content)
+            addSnippet(snippets);
+        else if (Array.isArray(snippets))
+            snippets.forEach(addSnippet);
+        
+        this._signal("registerSnippets", {scope: scope});
+    };
+    this.unregister = function(snippets, scope) {
+        var snippetMap = this.snippetMap;
+        var snippetNameMap = this.snippetNameMap;
+
+        function removeSnippet(s) {
+            var nameMap = snippetNameMap[s.scope||scope];
+            if (nameMap && nameMap[s.name]) {
+                delete nameMap[s.name];
+                var map = snippetMap[s.scope||scope];
+                var i = map && map.indexOf(s);
+                if (i >= 0)
+                    map.splice(i, 1);
+            }
+        }
+        if (snippets.content)
+            removeSnippet(snippets);
+        else if (Array.isArray(snippets))
+            snippets.forEach(removeSnippet);
+    };
+    this.parseSnippetFile = function(str) {
+        str = str.replace(/\r/g, "");
+        var list = [], snippet = {};
+        var re = /^#.*|^({[\s\S]*})\s*$|^(\S+) (.*)$|^((?:\n*\t.*)+)/gm;
+        var m;
+        while (m = re.exec(str)) {
+            if (m[1]) {
+                try {
+                    snippet = JSON.parse(m[1]);
+                    list.push(snippet);
+                } catch (e) {}
+            } if (m[4]) {
+                snippet.content = m[4].replace(/^\t/gm, "");
+                list.push(snippet);
+                snippet = {};
+            } else {
+                var key = m[2], val = m[3];
+                if (key == "regex") {
+                    var guardRe = /\/((?:[^\/\\]|\\.)*)|$/g;
+                    snippet.guard = guardRe.exec(val)[1];
+                    snippet.trigger = guardRe.exec(val)[1];
+                    snippet.endTrigger = guardRe.exec(val)[1];
+                    snippet.endGuard = guardRe.exec(val)[1];
+                } else if (key == "snippet") {
+                    snippet.tabTrigger = val.match(/^\S*/)[0];
+                    if (!snippet.name)
+                        snippet.name = val;
+                } else {
+                    snippet[key] = val;
+                }
+            }
+        }
+        return list;
+    };
+    this.getSnippetByName = function(name, editor) {
+        var snippetMap = this.snippetNameMap;
+        var snippet;
+        this.getActiveScopes(editor).some(function(scope) {
+            var snippets = snippetMap[scope];
+            if (snippets)
+                snippet = snippets[name];
+            return !!snippet;
+        }, this);
+        return snippet;
+    };
+
+}).call(SnippetManager.prototype);
+
+
+var TabstopManager = function(editor) {
+    if (editor.tabstopManager)
+        return editor.tabstopManager;
+    editor.tabstopManager = this;
+    this.$onChange = this.onChange.bind(this);
+    this.$onChangeSelection = lang.delayedCall(this.onChangeSelection.bind(this)).schedule;
+    this.$onChangeSession = this.onChangeSession.bind(this);
+    this.$onAfterExec = this.onAfterExec.bind(this);
+    this.attach(editor);
+};
+(function() {
+    this.attach = function(editor) {
+        this.index = 0;
+        this.ranges = [];
+        this.tabstops = [];
+        this.$openTabstops = null;
+        this.selectedTabstop = null;
+
+        this.editor = editor;
+        this.editor.on("change", this.$onChange);
+        this.editor.on("changeSelection", this.$onChangeSelection);
+        this.editor.on("changeSession", this.$onChangeSession);
+        this.editor.commands.on("afterExec", this.$onAfterExec);
+        this.editor.keyBinding.addKeyboardHandler(this.keyboardHandler);
+    };
+    this.detach = function() {
+        this.tabstops.forEach(this.removeTabstopMarkers, this);
+        this.ranges = null;
+        this.tabstops = null;
+        this.selectedTabstop = null;
+        this.editor.removeListener("change", this.$onChange);
+        this.editor.removeListener("changeSelection", this.$onChangeSelection);
+        this.editor.removeListener("changeSession", this.$onChangeSession);
+        this.editor.commands.removeListener("afterExec", this.$onAfterExec);
+        this.editor.keyBinding.removeKeyboardHandler(this.keyboardHandler);
+        this.editor.tabstopManager = null;
+        this.editor = null;
+    };
+
+    this.onChange = function(delta) {
+        var changeRange = delta;
+        var isRemove = delta.action[0] == "r";
+        var start = delta.start;
+        var end = delta.end;
+        var startRow = start.row;
+        var endRow = end.row;
+        var lineDif = endRow - startRow;
+        var colDiff = end.column - start.column;
+
+        if (isRemove) {
+            lineDif = -lineDif;
+            colDiff = -colDiff;
+        }
+        if (!this.$inChange && isRemove) {
+            var ts = this.selectedTabstop;
+            var changedOutside = ts && !ts.some(function(r) {
+                return comparePoints(r.start, start) <= 0 && comparePoints(r.end, end) >= 0;
+            });
+            if (changedOutside)
+                return this.detach();
+        }
+        var ranges = this.ranges;
+        for (var i = 0; i < ranges.length; i++) {
+            var r = ranges[i];
+            if (r.end.row < start.row)
+                continue;
+
+            if (isRemove && comparePoints(start, r.start) < 0 && comparePoints(end, r.end) > 0) {
+                this.removeRange(r);
+                i--;
+                continue;
+            }
+
+            if (r.start.row == startRow && r.start.column > start.column)
+                r.start.column += colDiff;
+            if (r.end.row == startRow && r.end.column >= start.column)
+                r.end.column += colDiff;
+            if (r.start.row >= startRow)
+                r.start.row += lineDif;
+            if (r.end.row >= startRow)
+                r.end.row += lineDif;
+
+            if (comparePoints(r.start, r.end) > 0)
+                this.removeRange(r);
+        }
+        if (!ranges.length)
+            this.detach();
+    };
+    this.updateLinkedFields = function() {
+        var ts = this.selectedTabstop;
+        if (!ts || !ts.hasLinkedRanges)
+            return;
+        this.$inChange = true;
+        var session = this.editor.session;
+        var text = session.getTextRange(ts.firstNonLinked);
+        for (var i = ts.length; i--;) {
+            var range = ts[i];
+            if (!range.linked)
+                continue;
+            var fmt = exports.snippetManager.tmStrFormat(text, range.original);
+            session.replace(range, fmt);
+        }
+        this.$inChange = false;
+    };
+    this.onAfterExec = function(e) {
+        if (e.command && !e.command.readOnly)
+            this.updateLinkedFields();
+    };
+    this.onChangeSelection = function() {
+        if (!this.editor)
+            return;
+        var lead = this.editor.selection.lead;
+        var anchor = this.editor.selection.anchor;
+        var isEmpty = this.editor.selection.isEmpty();
+        for (var i = this.ranges.length; i--;) {
+            if (this.ranges[i].linked)
+                continue;
+            var containsLead = this.ranges[i].contains(lead.row, lead.column);
+            var containsAnchor = isEmpty || this.ranges[i].contains(anchor.row, anchor.column);
+            if (containsLead && containsAnchor)
+                return;
+        }
+        this.detach();
+    };
+    this.onChangeSession = function() {
+        this.detach();
+    };
+    this.tabNext = function(dir) {
+        var max = this.tabstops.length;
+        var index = this.index + (dir || 1);
+        index = Math.min(Math.max(index, 1), max);
+        if (index == max)
+            index = 0;
+        this.selectTabstop(index);
+        if (index === 0)
+            this.detach();
+    };
+    this.selectTabstop = function(index) {
+        this.$openTabstops = null;
+        var ts = this.tabstops[this.index];
+        if (ts)
+            this.addTabstopMarkers(ts);
+        this.index = index;
+        ts = this.tabstops[this.index];
+        if (!ts || !ts.length)
+            return;
+        
+        this.selectedTabstop = ts;
+        if (!this.editor.inVirtualSelectionMode) {        
+            var sel = this.editor.multiSelect;
+            sel.toSingleRange(ts.firstNonLinked.clone());
+            for (var i = ts.length; i--;) {
+                if (ts.hasLinkedRanges && ts[i].linked)
+                    continue;
+                sel.addRange(ts[i].clone(), true);
+            }
+            if (sel.ranges[0])
+                sel.addRange(sel.ranges[0].clone());
+        } else {
+            this.editor.selection.setRange(ts.firstNonLinked);
+        }
+        
+        this.editor.keyBinding.addKeyboardHandler(this.keyboardHandler);
+    };
+    this.addTabstops = function(tabstops, start, end) {
+        if (!this.$openTabstops)
+            this.$openTabstops = [];
+        if (!tabstops[0]) {
+            var p = Range.fromPoints(end, end);
+            moveRelative(p.start, start);
+            moveRelative(p.end, start);
+            tabstops[0] = [p];
+            tabstops[0].index = 0;
+        }
+
+        var i = this.index;
+        var arg = [i + 1, 0];
+        var ranges = this.ranges;
+        tabstops.forEach(function(ts, index) {
+            var dest = this.$openTabstops[index] || ts;
+                
+            for (var i = ts.length; i--;) {
+                var p = ts[i];
+                var range = Range.fromPoints(p.start, p.end || p.start);
+                movePoint(range.start, start);
+                movePoint(range.end, start);
+                range.original = p;
+                range.tabstop = dest;
+                ranges.push(range);
+                if (dest != ts)
+                    dest.unshift(range);
+                else
+                    dest[i] = range;
+                if (p.fmtString) {
+                    range.linked = true;
+                    dest.hasLinkedRanges = true;
+                } else if (!dest.firstNonLinked)
+                    dest.firstNonLinked = range;
+            }
+            if (!dest.firstNonLinked)
+                dest.hasLinkedRanges = false;
+            if (dest === ts) {
+                arg.push(dest);
+                this.$openTabstops[index] = dest;
+            }
+            this.addTabstopMarkers(dest);
+        }, this);
+        
+        if (arg.length > 2) {
+            if (this.tabstops.length)
+                arg.push(arg.splice(2, 1)[0]);
+            this.tabstops.splice.apply(this.tabstops, arg);
+        }
+    };
+
+    this.addTabstopMarkers = function(ts) {
+        var session = this.editor.session;
+        ts.forEach(function(range) {
+            if  (!range.markerId)
+                range.markerId = session.addMarker(range, "ace_snippet-marker", "text");
+        });
+    };
+    this.removeTabstopMarkers = function(ts) {
+        var session = this.editor.session;
+        ts.forEach(function(range) {
+            session.removeMarker(range.markerId);
+            range.markerId = null;
+        });
+    };
+    this.removeRange = function(range) {
+        var i = range.tabstop.indexOf(range);
+        range.tabstop.splice(i, 1);
+        i = this.ranges.indexOf(range);
+        this.ranges.splice(i, 1);
+        this.editor.session.removeMarker(range.markerId);
+        if (!range.tabstop.length) {
+            i = this.tabstops.indexOf(range.tabstop);
+            if (i != -1)
+                this.tabstops.splice(i, 1);
+            if (!this.tabstops.length)
+                this.detach();
+        }
+    };
+
+    this.keyboardHandler = new HashHandler();
+    this.keyboardHandler.bindKeys({
+        "Tab": function(ed) {
+            if (exports.snippetManager && exports.snippetManager.expandWithTab(ed)) {
+                return;
+            }
+
+            ed.tabstopManager.tabNext(1);
+        },
+        "Shift-Tab": function(ed) {
+            ed.tabstopManager.tabNext(-1);
+        },
+        "Esc": function(ed) {
+            ed.tabstopManager.detach();
+        },
+        "Return": function(ed) {
+            return false;
+        }
+    });
+}).call(TabstopManager.prototype);
+
+
+
+var changeTracker = {};
+changeTracker.onChange = Anchor.prototype.onChange;
+changeTracker.setPosition = function(row, column) {
+    this.pos.row = row;
+    this.pos.column = column;
+};
+changeTracker.update = function(pos, delta, $insertRight) {
+    this.$insertRight = $insertRight;
+    this.pos = pos; 
+    this.onChange(delta);
+};
+
+var movePoint = function(point, diff) {
+    if (point.row == 0)
+        point.column += diff.column;
+    point.row += diff.row;
+};
+
+var moveRelative = function(point, start) {
+    if (point.row == start.row)
+        point.column -= start.column;
+    point.row -= start.row;
+};
+
+
+acequire("./lib/dom").importCssString("\
+.ace_snippet-marker {\
+    -moz-box-sizing: border-box;\
+    box-sizing: border-box;\
+    background: rgba(194, 193, 208, 0.09);\
+    border: 1px dotted rgba(211, 208, 235, 0.62);\
+    position: absolute;\
+}");
+
+exports.snippetManager = new SnippetManager();
+
+
+var Editor = acequire("./editor").Editor;
+(function() {
+    this.insertSnippet = function(content, options) {
+        return exports.snippetManager.insertSnippet(this, content, options);
+    };
+    this.expandSnippet = function(options) {
+        return exports.snippetManager.expandWithTab(this, options);
+    };
+}).call(Editor.prototype);
+
+});
+
+ace.define("ace/autocomplete/popup",["require","exports","module","ace/virtual_renderer","ace/editor","ace/range","ace/lib/event","ace/lib/lang","ace/lib/dom"], function(acequire, exports, module) {
+"use strict";
+
+var Renderer = acequire("../virtual_renderer").VirtualRenderer;
+var Editor = acequire("../editor").Editor;
+var Range = acequire("../range").Range;
+var event = acequire("../lib/event");
+var lang = acequire("../lib/lang");
+var dom = acequire("../lib/dom");
+
+var $singleLineEditor = function(el) {
+    var renderer = new Renderer(el);
+
+    renderer.$maxLines = 4;
+
+    var editor = new Editor(renderer);
+
+    editor.setHighlightActiveLine(false);
+    editor.setShowPrintMargin(false);
+    editor.renderer.setShowGutter(false);
+    editor.renderer.setHighlightGutterLine(false);
+
+    editor.$mouseHandler.$focusWaitTimout = 0;
+    editor.$highlightTagPending = true;
+
+    return editor;
+};
+
+var AcePopup = function(parentNode) {
+    var el = dom.createElement("div");
+    var popup = new $singleLineEditor(el);
+
+    if (parentNode)
+        parentNode.appendChild(el);
+    el.style.display = "none";
+    popup.renderer.content.style.cursor = "default";
+    popup.renderer.setStyle("ace_autocomplete");
+
+    popup.setOption("displayIndentGuides", false);
+    popup.setOption("dragDelay", 150);
+
+    var noop = function(){};
+
+    popup.focus = noop;
+    popup.$isFocused = true;
+
+    popup.renderer.$cursorLayer.restartTimer = noop;
+    popup.renderer.$cursorLayer.element.style.opacity = 0;
+
+    popup.renderer.$maxLines = 8;
+    popup.renderer.$keepTextAreaAtCursor = false;
+
+    popup.setHighlightActiveLine(false);
+    popup.session.highlight("");
+    popup.session.$searchHighlight.clazz = "ace_highlight-marker";
+
+    popup.on("mousedown", function(e) {
+        var pos = e.getDocumentPosition();
+        popup.selection.moveToPosition(pos);
+        selectionMarker.start.row = selectionMarker.end.row = pos.row;
+        e.stop();
+    });
+
+    var lastMouseEvent;
+    var hoverMarker = new Range(-1,0,-1,Infinity);
+    var selectionMarker = new Range(-1,0,-1,Infinity);
+    selectionMarker.id = popup.session.addMarker(selectionMarker, "ace_active-line", "fullLine");
+    popup.setSelectOnHover = function(val) {
+        if (!val) {
+            hoverMarker.id = popup.session.addMarker(hoverMarker, "ace_line-hover", "fullLine");
+        } else if (hoverMarker.id) {
+            popup.session.removeMarker(hoverMarker.id);
+            hoverMarker.id = null;
+        }
+    };
+    popup.setSelectOnHover(false);
+    popup.on("mousemove", function(e) {
+        if (!lastMouseEvent) {
+            lastMouseEvent = e;
+            return;
+        }
+        if (lastMouseEvent.x == e.x && lastMouseEvent.y == e.y) {
+            return;
+        }
+        lastMouseEvent = e;
+        lastMouseEvent.scrollTop = popup.renderer.scrollTop;
+        var row = lastMouseEvent.getDocumentPosition().row;
+        if (hoverMarker.start.row != row) {
+            if (!hoverMarker.id)
+                popup.setRow(row);
+            setHoverMarker(row);
+        }
+    });
+    popup.renderer.on("beforeRender", function() {
+        if (lastMouseEvent && hoverMarker.start.row != -1) {
+            lastMouseEvent.$pos = null;
+            var row = lastMouseEvent.getDocumentPosition().row;
+            if (!hoverMarker.id)
+                popup.setRow(row);
+            setHoverMarker(row, true);
+        }
+    });
+    popup.renderer.on("afterRender", function() {
+        var row = popup.getRow();
+        var t = popup.renderer.$textLayer;
+        var selected = t.element.childNodes[row - t.config.firstRow];
+        if (selected == t.selectedNode)
+            return;
+        if (t.selectedNode)
+            dom.removeCssClass(t.selectedNode, "ace_selected");
+        t.selectedNode = selected;
+        if (selected)
+            dom.addCssClass(selected, "ace_selected");
+    });
+    var hideHoverMarker = function() { setHoverMarker(-1); };
+    var setHoverMarker = function(row, suppressRedraw) {
+        if (row !== hoverMarker.start.row) {
+            hoverMarker.start.row = hoverMarker.end.row = row;
+            if (!suppressRedraw)
+                popup.session._emit("changeBackMarker");
+            popup._emit("changeHoverMarker");
+        }
+    };
+    popup.getHoveredRow = function() {
+        return hoverMarker.start.row;
+    };
+
+    event.addListener(popup.container, "mouseout", hideHoverMarker);
+    popup.on("hide", hideHoverMarker);
+    popup.on("changeSelection", hideHoverMarker);
+
+    popup.session.doc.getLength = function() {
+        return popup.data.length;
+    };
+    popup.session.doc.getLine = function(i) {
+        var data = popup.data[i];
+        if (typeof data == "string")
+            return data;
+        return (data && data.value) || "";
+    };
+
+    var bgTokenizer = popup.session.bgTokenizer;
+    bgTokenizer.$tokenizeRow = function(row) {
+        var data = popup.data[row];
+        var tokens = [];
+        if (!data)
+            return tokens;
+        if (typeof data == "string")
+            data = {value: data};
+        if (!data.caption)
+            data.caption = data.value || data.name;
+
+        var last = -1;
+        var flag, c;
+        for (var i = 0; i < data.caption.length; i++) {
+            c = data.caption[i];
+            flag = data.matchMask & (1 << i) ? 1 : 0;
+            if (last !== flag) {
+                tokens.push({type: data.className || "" + ( flag ? "completion-highlight" : ""), value: c});
+                last = flag;
+            } else {
+                tokens[tokens.length - 1].value += c;
+            }
+        }
+
+        if (data.meta) {
+            var maxW = popup.renderer.$size.scrollerWidth / popup.renderer.layerConfig.characterWidth;
+            var metaData = data.meta;
+            if (metaData.length + data.caption.length > maxW - 2) {
+                metaData = metaData.substr(0, maxW - data.caption.length - 3) + "\u2026";
+            }
+            tokens.push({type: "rightAlignedText", value: metaData});
+        }
+        return tokens;
+    };
+    bgTokenizer.$updateOnChange = noop;
+    bgTokenizer.start = noop;
+
+    popup.session.$computeWidth = function() {
+        return this.screenWidth = 0;
+    };
+
+    popup.$blockScrolling = Infinity;
+    popup.isOpen = false;
+    popup.isTopdown = false;
+    popup.autoSelect = true;
+
+    popup.data = [];
+    popup.setData = function(list) {
+        popup.setValue(lang.stringRepeat("\n", list.length), -1);
+        popup.data = list || [];
+        popup.setRow(0);
+    };
+    popup.getData = function(row) {
+        return popup.data[row];
+    };
+
+    popup.getRow = function() {
+        return selectionMarker.start.row;
+    };
+    popup.setRow = function(line) {
+        line = Math.max(this.autoSelect ? 0 : -1, Math.min(this.data.length, line));
+        if (selectionMarker.start.row != line) {
+            popup.selection.clearSelection();
+            selectionMarker.start.row = selectionMarker.end.row = line || 0;
+            popup.session._emit("changeBackMarker");
+            popup.moveCursorTo(line || 0, 0);
+            if (popup.isOpen)
+                popup._signal("select");
+        }
+    };
+
+    popup.on("changeSelection", function() {
+        if (popup.isOpen)
+            popup.setRow(popup.selection.lead.row);
+        popup.renderer.scrollCursorIntoView();
+    });
+
+    popup.hide = function() {
+        this.container.style.display = "none";
+        this._signal("hide");
+        popup.isOpen = false;
+    };
+    popup.show = function(pos, lineHeight, topdownOnly) {
+        var el = this.container;
+        var screenHeight = window.innerHeight;
+        var screenWidth = window.innerWidth;
+        var renderer = this.renderer;
+        var maxH = renderer.$maxLines * lineHeight * 1.4;
+        var top = pos.top + this.$borderSize;
+        var allowTopdown = top > screenHeight / 2 && !topdownOnly;
+        if (allowTopdown && top + lineHeight + maxH > screenHeight) {
+            renderer.$maxPixelHeight = top - 2 * this.$borderSize;
+            el.style.top = "";
+            el.style.bottom = screenHeight - top + "px";
+            popup.isTopdown = false;
+        } else {
+            top += lineHeight;
+            renderer.$maxPixelHeight = screenHeight - top - 0.2 * lineHeight;
+            el.style.top = top + "px";
+            el.style.bottom = "";
+            popup.isTopdown = true;
+        }
+
+        el.style.display = "";
+        this.renderer.$textLayer.checkForSizeChanges();
+
+        var left = pos.left;
+        if (left + el.offsetWidth > screenWidth)
+            left = screenWidth - el.offsetWidth;
+
+        el.style.left = left + "px";
+
+        this._signal("show");
+        lastMouseEvent = null;
+        popup.isOpen = true;
+    };
+
+    popup.getTextLeftOffset = function() {
+        return this.$borderSize + this.renderer.$padding + this.$imageSize;
+    };
+
+    popup.$imageSize = 0;
+    popup.$borderSize = 1;
+
+    return popup;
+};
+
+dom.importCssString("\
+.ace_editor.ace_autocomplete .ace_marker-layer .ace_active-line {\
+    background-color: #CAD6FA;\
+    z-index: 1;\
+}\
+.ace_editor.ace_autocomplete .ace_line-hover {\
+    border: 1px solid #abbffe;\
+    margin-top: -1px;\
+    background: rgba(233,233,253,0.4);\
+}\
+.ace_editor.ace_autocomplete .ace_line-hover {\
+    position: absolute;\
+    z-index: 2;\
+}\
+.ace_editor.ace_autocomplete .ace_scroller {\
+   background: none;\
+   border: none;\
+   box-shadow: none;\
+}\
+.ace_rightAlignedText {\
+    color: gray;\
+    display: inline-block;\
+    position: absolute;\
+    right: 4px;\
+    text-align: right;\
+    z-index: -1;\
+}\
+.ace_editor.ace_autocomplete .ace_completion-highlight{\
+    color: #000;\
+    text-shadow: 0 0 0.01em;\
+}\
+.ace_editor.ace_autocomplete {\
+    width: 280px;\
+    z-index: 200000;\
+    background: #fbfbfb;\
+    color: #444;\
+    border: 1px lightgray solid;\
+    position: fixed;\
+    box-shadow: 2px 3px 5px rgba(0,0,0,.2);\
+    line-height: 1.4;\
+}");
+
+exports.AcePopup = AcePopup;
+
+});
+
+ace.define("ace/autocomplete/util",["require","exports","module"], function(acequire, exports, module) {
+"use strict";
+
+exports.parForEach = function(array, fn, callback) {
+    var completed = 0;
+    var arLength = array.length;
+    if (arLength === 0)
+        callback();
+    for (var i = 0; i < arLength; i++) {
+        fn(array[i], function(result, err) {
+            completed++;
+            if (completed === arLength)
+                callback(result, err);
+        });
+    }
+};
+
+var ID_REGEX = /[a-zA-Z_0-9\$\-\u00A2-\uFFFF]/;
+
+exports.retrievePrecedingIdentifier = function(text, pos, regex) {
+    regex = regex || ID_REGEX;
+    var buf = [];
+    for (var i = pos-1; i >= 0; i--) {
+        if (regex.test(text[i]))
+            buf.push(text[i]);
+        else
+            break;
+    }
+    return buf.reverse().join("");
+};
+
+exports.retrieveFollowingIdentifier = function(text, pos, regex) {
+    regex = regex || ID_REGEX;
+    var buf = [];
+    for (var i = pos; i < text.length; i++) {
+        if (regex.test(text[i]))
+            buf.push(text[i]);
+        else
+            break;
+    }
+    return buf;
+};
+
+exports.getCompletionPrefix = function (editor) {
+    var pos = editor.getCursorPosition();
+    var line = editor.session.getLine(pos.row);
+    var prefix;
+    editor.completers.forEach(function(completer) {
+        if (completer.identifierRegexps) {
+            completer.identifierRegexps.forEach(function(identifierRegex) {
+                if (!prefix && identifierRegex)
+                    prefix = this.retrievePrecedingIdentifier(line, pos.column, identifierRegex);
+            }.bind(this));
+        }
+    }.bind(this));
+    return prefix || this.retrievePrecedingIdentifier(line, pos.column);
+};
+
+});
+
+ace.define("ace/autocomplete",["require","exports","module","ace/keyboard/hash_handler","ace/autocomplete/popup","ace/autocomplete/util","ace/lib/event","ace/lib/lang","ace/lib/dom","ace/snippets"], function(acequire, exports, module) {
+"use strict";
+
+var HashHandler = acequire("./keyboard/hash_handler").HashHandler;
+var AcePopup = acequire("./autocomplete/popup").AcePopup;
+var util = acequire("./autocomplete/util");
+var event = acequire("./lib/event");
+var lang = acequire("./lib/lang");
+var dom = acequire("./lib/dom");
+var snippetManager = acequire("./snippets").snippetManager;
+
+var Autocomplete = function() {
+    this.autoInsert = false;
+    this.autoSelect = true;
+    this.exactMatch = false;
+    this.gatherCompletionsId = 0;
+    this.keyboardHandler = new HashHandler();
+    this.keyboardHandler.bindKeys(this.commands);
+
+    this.blurListener = this.blurListener.bind(this);
+    this.changeListener = this.changeListener.bind(this);
+    this.mousedownListener = this.mousedownListener.bind(this);
+    this.mousewheelListener = this.mousewheelListener.bind(this);
+
+    this.changeTimer = lang.delayedCall(function() {
+        this.updateCompletions(true);
+    }.bind(this));
+
+    this.tooltipTimer = lang.delayedCall(this.updateDocTooltip.bind(this), 50);
+};
+
+(function() {
+
+    this.$init = function() {
+        this.popup = new AcePopup(document.body || document.documentElement);
+        this.popup.on("click", function(e) {
+            this.insertMatch();
+            e.stop();
+        }.bind(this));
+        this.popup.focus = this.editor.focus.bind(this.editor);
+        this.popup.on("show", this.tooltipTimer.bind(null, null));
+        this.popup.on("select", this.tooltipTimer.bind(null, null));
+        this.popup.on("changeHoverMarker", this.tooltipTimer.bind(null, null));
+        return this.popup;
+    };
+
+    this.getPopup = function() {
+        return this.popup || this.$init();
+    };
+
+    this.openPopup = function(editor, prefix, keepPopupPosition) {
+        if (!this.popup)
+            this.$init();
+
+	this.popup.autoSelect = this.autoSelect;
+
+        this.popup.setData(this.completions.filtered);
+
+        editor.keyBinding.addKeyboardHandler(this.keyboardHandler);
+        
+        var renderer = editor.renderer;
+        this.popup.setRow(this.autoSelect ? 0 : -1);
+        if (!keepPopupPosition) {
+            this.popup.setTheme(editor.getTheme());
+            this.popup.setFontSize(editor.getFontSize());
+
+            var lineHeight = renderer.layerConfig.lineHeight;
+
+            var pos = renderer.$cursorLayer.getPixelPosition(this.base, true);
+            pos.left -= this.popup.getTextLeftOffset();
+
+            var rect = editor.container.getBoundingClientRect();
+            pos.top += rect.top - renderer.layerConfig.offset;
+            pos.left += rect.left - editor.renderer.scrollLeft;
+            pos.left += renderer.gutterWidth;
+
+            this.popup.show(pos, lineHeight);
+        } else if (keepPopupPosition && !prefix) {
+            this.detach();
+        }
+    };
+
+    this.detach = function() {
+        this.editor.keyBinding.removeKeyboardHandler(this.keyboardHandler);
+        this.editor.off("changeSelection", this.changeListener);
+        this.editor.off("blur", this.blurListener);
+        this.editor.off("mousedown", this.mousedownListener);
+        this.editor.off("mousewheel", this.mousewheelListener);
+        this.changeTimer.cancel();
+        this.hideDocTooltip();
+
+        this.gatherCompletionsId += 1;
+        if (this.popup && this.popup.isOpen)
+            this.popup.hide();
+
+        if (this.base)
+            this.base.detach();
+        this.activated = false;
+        this.completions = this.base = null;
+    };
+
+    this.changeListener = function(e) {
+        var cursor = this.editor.selection.lead;
+        if (cursor.row != this.base.row || cursor.column < this.base.column) {
+            this.detach();
+        }
+        if (this.activated)
+            this.changeTimer.schedule();
+        else
+            this.detach();
+    };
+
+    this.blurListener = function(e) {
+        var el = document.activeElement;
+        var text = this.editor.textInput.getElement();
+        var fromTooltip = e.relatedTarget && this.tooltipNode && this.tooltipNode.contains(e.relatedTarget);
+        var container = this.popup && this.popup.container;
+        if (el != text && el.parentNode != container && !fromTooltip
+            && el != this.tooltipNode && e.relatedTarget != text
+        ) {
+            this.detach();
+        }
+    };
+
+    this.mousedownListener = function(e) {
+        this.detach();
+    };
+
+    this.mousewheelListener = function(e) {
+        this.detach();
+    };
+
+    this.goTo = function(where) {
+        var row = this.popup.getRow();
+        var max = this.popup.session.getLength() - 1;
+
+        switch(where) {
+            case "up": row = row <= 0 ? max : row - 1; break;
+            case "down": row = row >= max ? -1 : row + 1; break;
+            case "start": row = 0; break;
+            case "end": row = max; break;
+        }
+
+        this.popup.setRow(row);
+    };
+
+    this.insertMatch = function(data, options) {
+        if (!data)
+            data = this.popup.getData(this.popup.getRow());
+        if (!data)
+            return false;
+
+        if (data.completer && data.completer.insertMatch) {
+            data.completer.insertMatch(this.editor, data);
+        } else {
+            if (this.completions.filterText) {
+                var ranges = this.editor.selection.getAllRanges();
+                for (var i = 0, range; range = ranges[i]; i++) {
+                    range.start.column -= this.completions.filterText.length;
+                    this.editor.session.remove(range);
+                }
+            }
+            if (data.snippet)
+                snippetManager.insertSnippet(this.editor, data.snippet);
+            else
+                this.editor.execCommand("insertstring", data.value || data);
+        }
+        this.detach();
+    };
+
+
+    this.commands = {
+        "Up": function(editor) { editor.completer.goTo("up"); },
+        "Down": function(editor) { editor.completer.goTo("down"); },
+        "Ctrl-Up|Ctrl-Home": function(editor) { editor.completer.goTo("start"); },
+        "Ctrl-Down|Ctrl-End": function(editor) { editor.completer.goTo("end"); },
+
+        "Esc": function(editor) { editor.completer.detach(); },
+        "Return": function(editor) { return editor.completer.insertMatch(); },
+        "Shift-Return": function(editor) { editor.completer.insertMatch(null, {deleteSuffix: true}); },
+        "Tab": function(editor) {
+            var result = editor.completer.insertMatch();
+            if (!result && !editor.tabstopManager)
+                editor.completer.goTo("down");
+            else
+                return result;
+        },
+
+        "PageUp": function(editor) { editor.completer.popup.gotoPageUp(); },
+        "PageDown": function(editor) { editor.completer.popup.gotoPageDown(); }
+    };
+
+    this.gatherCompletions = function(editor, callback) {
+        var session = editor.getSession();
+        var pos = editor.getCursorPosition();
+
+        var prefix = util.getCompletionPrefix(editor);
+
+        this.base = session.doc.createAnchor(pos.row, pos.column - prefix.length);
+        this.base.$insertRight = true;
+
+        var matches = [];
+        var total = editor.completers.length;
+        editor.completers.forEach(function(completer, i) {
+            completer.getCompletions(editor, session, pos, prefix, function(err, results) {
+                if (!err && results)
+                    matches = matches.concat(results);
+                callback(null, {
+                    prefix: util.getCompletionPrefix(editor),
+                    matches: matches,
+                    finished: (--total === 0)
+                });
+            });
+        });
+        return true;
+    };
+
+    this.showPopup = function(editor) {
+        if (this.editor)
+            this.detach();
+
+        this.activated = true;
+
+        this.editor = editor;
+        if (editor.completer != this) {
+            if (editor.completer)
+                editor.completer.detach();
+            editor.completer = this;
+        }
+
+        editor.on("changeSelection", this.changeListener);
+        editor.on("blur", this.blurListener);
+        editor.on("mousedown", this.mousedownListener);
+        editor.on("mousewheel", this.mousewheelListener);
+
+        this.updateCompletions();
+    };
+
+    this.updateCompletions = function(keepPopupPosition) {
+        if (keepPopupPosition && this.base && this.completions) {
+            var pos = this.editor.getCursorPosition();
+            var prefix = this.editor.session.getTextRange({start: this.base, end: pos});
+            if (prefix == this.completions.filterText)
+                return;
+            this.completions.setFilter(prefix);
+            if (!this.completions.filtered.length)
+                return this.detach();
+            if (this.completions.filtered.length == 1
+            && this.completions.filtered[0].value == prefix
+            && !this.completions.filtered[0].snippet)
+                return this.detach();
+            this.openPopup(this.editor, prefix, keepPopupPosition);
+            return;
+        }
+        var _id = this.gatherCompletionsId;
+        this.gatherCompletions(this.editor, function(err, results) {
+            var detachIfFinished = function() {
+                if (!results.finished) return;
+                return this.detach();
+            }.bind(this);
+
+            var prefix = results.prefix;
+            var matches = results && results.matches;
+
+            if (!matches || !matches.length)
+                return detachIfFinished();
+            if (prefix.indexOf(results.prefix) !== 0 || _id != this.gatherCompletionsId)
+                return;
+
+            this.completions = new FilteredList(matches);
+
+            if (this.exactMatch)
+                this.completions.exactMatch = true;
+
+            this.completions.setFilter(prefix);
+            var filtered = this.completions.filtered;
+            if (!filtered.length)
+                return detachIfFinished();
+            if (filtered.length == 1 && filtered[0].value == prefix && !filtered[0].snippet)
+                return detachIfFinished();
+            if (this.autoInsert && filtered.length == 1 && results.finished)
+                return this.insertMatch(filtered[0]);
+
+            this.openPopup(this.editor, prefix, keepPopupPosition);
+        }.bind(this));
+    };
+
+    this.cancelContextMenu = function() {
+        this.editor.$mouseHandler.cancelContextMenu();
+    };
+
+    this.updateDocTooltip = function() {
+        var popup = this.popup;
+        var all = popup.data;
+        var selected = all && (all[popup.getHoveredRow()] || all[popup.getRow()]);
+        var doc = null;
+        if (!selected || !this.editor || !this.popup.isOpen)
+            return this.hideDocTooltip();
+        this.editor.completers.some(function(completer) {
+            if (completer.getDocTooltip)
+                doc = completer.getDocTooltip(selected);
+            return doc;
+        });
+        if (!doc)
+            doc = selected;
+
+        if (typeof doc == "string")
+            doc = {docText: doc};
+        if (!doc || !(doc.docHTML || doc.docText))
+            return this.hideDocTooltip();
+        this.showDocTooltip(doc);
+    };
+
+    this.showDocTooltip = function(item) {
+        if (!this.tooltipNode) {
+            this.tooltipNode = dom.createElement("div");
+            this.tooltipNode.className = "ace_tooltip ace_doc-tooltip";
+            this.tooltipNode.style.margin = 0;
+            this.tooltipNode.style.pointerEvents = "auto";
+            this.tooltipNode.tabIndex = -1;
+            this.tooltipNode.onblur = this.blurListener.bind(this);
+            this.tooltipNode.onclick = this.onTooltipClick.bind(this);
+        }
+
+        var tooltipNode = this.tooltipNode;
+        if (item.docHTML) {
+            tooltipNode.innerHTML = item.docHTML;
+        } else if (item.docText) {
+            tooltipNode.textContent = item.docText;
+        }
+
+        if (!tooltipNode.parentNode)
+            document.body.appendChild(tooltipNode);
+        var popup = this.popup;
+        var rect = popup.container.getBoundingClientRect();
+        tooltipNode.style.top = popup.container.style.top;
+        tooltipNode.style.bottom = popup.container.style.bottom;
+
+        if (window.innerWidth - rect.right < 320) {
+            tooltipNode.style.right = window.innerWidth - rect.left + "px";
+            tooltipNode.style.left = "";
+        } else {
+            tooltipNode.style.left = (rect.right + 1) + "px";
+            tooltipNode.style.right = "";
+        }
+        tooltipNode.style.display = "block";
+    };
+
+    this.hideDocTooltip = function() {
+        this.tooltipTimer.cancel();
+        if (!this.tooltipNode) return;
+        var el = this.tooltipNode;
+        if (!this.editor.isFocused() && document.activeElement == el)
+            this.editor.focus();
+        this.tooltipNode = null;
+        if (el.parentNode)
+            el.parentNode.removeChild(el);
+    };
+
+    this.onTooltipClick = function(e) {
+        var a = e.target;
+        while (a && a != this.tooltipNode) {
+            if (a.nodeName == "A" && a.href) {
+                a.rel = "noreferrer";
+                a.target = "_blank";
+                break;
+            }
+            a = a.parentNode;
+        }
+    };
+
+}).call(Autocomplete.prototype);
+
+Autocomplete.startCommand = {
+    name: "startAutocomplete",
+    exec: function(editor) {
+        if (!editor.completer)
+            editor.completer = new Autocomplete();
+        editor.completer.autoInsert = false;
+        editor.completer.autoSelect = true;
+        editor.completer.showPopup(editor);
+        editor.completer.cancelContextMenu();
+    },
+    bindKey: "Ctrl-Space|Ctrl-Shift-Space|Alt-Space"
+};
+
+var FilteredList = function(array, filterText) {
+    this.all = array;
+    this.filtered = array;
+    this.filterText = filterText || "";
+    this.exactMatch = false;
+};
+(function(){
+    this.setFilter = function(str) {
+        if (str.length > this.filterText && str.lastIndexOf(this.filterText, 0) === 0)
+            var matches = this.filtered;
+        else
+            var matches = this.all;
+
+        this.filterText = str;
+        matches = this.filterCompletions(matches, this.filterText);
+        matches = matches.sort(function(a, b) {
+            return b.exactMatch - a.exactMatch || b.score - a.score;
+        });
+        var prev = null;
+        matches = matches.filter(function(item){
+            var caption = item.snippet || item.caption || item.value;
+            if (caption === prev) return false;
+            prev = caption;
+            return true;
+        });
+
+        this.filtered = matches;
+    };
+    this.filterCompletions = function(items, needle) {
+        var results = [];
+        var upper = needle.toUpperCase();
+        var lower = needle.toLowerCase();
+        loop: for (var i = 0, item; item = items[i]; i++) {
+            var caption = item.value || item.caption || item.snippet;
+            if (!caption) continue;
+            var lastIndex = -1;
+            var matchMask = 0;
+            var penalty = 0;
+            var index, distance;
+
+            if (this.exactMatch) {
+                if (needle !== caption.substr(0, needle.length))
+                    continue loop;
+            }else{
+                for (var j = 0; j < needle.length; j++) {
+                    var i1 = caption.indexOf(lower[j], lastIndex + 1);
+                    var i2 = caption.indexOf(upper[j], lastIndex + 1);
+                    index = (i1 >= 0) ? ((i2 < 0 || i1 < i2) ? i1 : i2) : i2;
+                    if (index < 0)
+                        continue loop;
+                    distance = index - lastIndex - 1;
+                    if (distance > 0) {
+                        if (lastIndex === -1)
+                            penalty += 10;
+                        penalty += distance;
+                    }
+                    matchMask = matchMask | (1 << index);
+                    lastIndex = index;
+                }
+            }
+            item.matchMask = matchMask;
+            item.exactMatch = penalty ? 0 : 1;
+            item.score = (item.score || 0) - penalty;
+            results.push(item);
+        }
+        return results;
+    };
+}).call(FilteredList.prototype);
+
+exports.Autocomplete = Autocomplete;
+exports.FilteredList = FilteredList;
+
+});
+
+ace.define("ace/autocomplete/text_completer",["require","exports","module","ace/range"], function(acequire, exports, module) {
+    var Range = acequire("../range").Range;
+    
+    var splitRegex = /[^a-zA-Z_0-9\$\-\u00C0-\u1FFF\u2C00-\uD7FF\w]+/;
+
+    function getWordIndex(doc, pos) {
+        var textBefore = doc.getTextRange(Range.fromPoints({row: 0, column:0}, pos));
+        return textBefore.split(splitRegex).length - 1;
+    }
+    function wordDistance(doc, pos) {
+        var prefixPos = getWordIndex(doc, pos);
+        var words = doc.getValue().split(splitRegex);
+        var wordScores = Object.create(null);
+        
+        var currentWord = words[prefixPos];
+
+        words.forEach(function(word, idx) {
+            if (!word || word === currentWord) return;
+
+            var distance = Math.abs(prefixPos - idx);
+            var score = words.length - distance;
+            if (wordScores[word]) {
+                wordScores[word] = Math.max(score, wordScores[word]);
+            } else {
+                wordScores[word] = score;
+            }
+        });
+        return wordScores;
+    }
+
+    exports.getCompletions = function(editor, session, pos, prefix, callback) {
+        var wordScore = wordDistance(session, pos, prefix);
+        var wordList = Object.keys(wordScore);
+        callback(null, wordList.map(function(word) {
+            return {
+                caption: word,
+                value: word,
+                score: wordScore[word],
+                meta: "local"
+            };
+        }));
+    };
+});
+
+ace.define("ace/ext/language_tools",["require","exports","module","ace/snippets","ace/autocomplete","ace/config","ace/lib/lang","ace/autocomplete/util","ace/autocomplete/text_completer","ace/editor","ace/config"], function(acequire, exports, module) {
+"use strict";
+
+var snippetManager = acequire("../snippets").snippetManager;
+var Autocomplete = acequire("../autocomplete").Autocomplete;
+var config = acequire("../config");
+var lang = acequire("../lib/lang");
+var util = acequire("../autocomplete/util");
+
+var textCompleter = acequire("../autocomplete/text_completer");
+var keyWordCompleter = {
+    getCompletions: function(editor, session, pos, prefix, callback) {
+        if (session.$mode.completer) {
+            return session.$mode.completer.getCompletions(editor, session, pos, prefix, callback);
+        }
+        var state = editor.session.getState(pos.row);
+        var completions = session.$mode.getCompletions(state, session, pos, prefix);
+        callback(null, completions);
+    }
+};
+
+var snippetCompleter = {
+    getCompletions: function(editor, session, pos, prefix, callback) {
+        var snippetMap = snippetManager.snippetMap;
+        var completions = [];
+        snippetManager.getActiveScopes(editor).forEach(function(scope) {
+            var snippets = snippetMap[scope] || [];
+            for (var i = snippets.length; i--;) {
+                var s = snippets[i];
+                var caption = s.name || s.tabTrigger;
+                if (!caption)
+                    continue;
+                completions.push({
+                    caption: caption,
+                    snippet: s.content,
+                    meta: s.tabTrigger && !s.name ? s.tabTrigger + "\u21E5 " : "snippet",
+                    type: "snippet"
+                });
+            }
+        }, this);
+        callback(null, completions);
+    },
+    getDocTooltip: function(item) {
+        if (item.type == "snippet" && !item.docHTML) {
+            item.docHTML = [
+                "<b>", lang.escapeHTML(item.caption), "</b>", "<hr></hr>",
+                lang.escapeHTML(item.snippet)
+            ].join("");
+        }
+    }
+};
+
+var completers = [snippetCompleter, textCompleter, keyWordCompleter];
+exports.setCompleters = function(val) {
+    completers.length = 0;
+    if (val) completers.push.apply(completers, val);
+};
+exports.addCompleter = function(completer) {
+    completers.push(completer);
+};
+exports.textCompleter = textCompleter;
+exports.keyWordCompleter = keyWordCompleter;
+exports.snippetCompleter = snippetCompleter;
+
+var expandSnippet = {
+    name: "expandSnippet",
+    exec: function(editor) {
+        return snippetManager.expandWithTab(editor);
+    },
+    bindKey: "Tab"
+};
+
+var onChangeMode = function(e, editor) {
+    loadSnippetsForMode(editor.session.$mode);
+};
+
+var loadSnippetsForMode = function(mode) {
+    var id = mode.$id;
+    if (!snippetManager.files)
+        snippetManager.files = {};
+    loadSnippetFile(id);
+    if (mode.modes)
+        mode.modes.forEach(loadSnippetsForMode);
+};
+
+var loadSnippetFile = function(id) {
+    if (!id || snippetManager.files[id])
+        return;
+    var snippetFilePath = id.replace("mode", "snippets");
+    snippetManager.files[id] = {};
+    config.loadModule(snippetFilePath, function(m) {
+        if (m) {
+            snippetManager.files[id] = m;
+            if (!m.snippets && m.snippetText)
+                m.snippets = snippetManager.parseSnippetFile(m.snippetText);
+            snippetManager.register(m.snippets || [], m.scope);
+            if (m.includeScopes) {
+                snippetManager.snippetMap[m.scope].includeScopes = m.includeScopes;
+                m.includeScopes.forEach(function(x) {
+                    loadSnippetFile("ace/mode/" + x);
+                });
+            }
+        }
+    });
+};
+
+var doLiveAutocomplete = function(e) {
+    var editor = e.editor;
+    var hasCompleter = editor.completer && editor.completer.activated;
+    if (e.command.name === "backspace") {
+        if (hasCompleter && !util.getCompletionPrefix(editor))
+            editor.completer.detach();
+    }
+    else if (e.command.name === "insertstring") {
+        var prefix = util.getCompletionPrefix(editor);
+        if (prefix && !hasCompleter) {
+            if (!editor.completer) {
+                editor.completer = new Autocomplete();
+            }
+            editor.completer.autoInsert = false;
+            editor.completer.showPopup(editor);
+        }
+    }
+};
+
+var Editor = acequire("../editor").Editor;
+acequire("../config").defineOptions(Editor.prototype, "editor", {
+    enableBasicAutocompletion: {
+        set: function(val) {
+            if (val) {
+                if (!this.completers)
+                    this.completers = Array.isArray(val)? val: completers;
+                this.commands.addCommand(Autocomplete.startCommand);
+            } else {
+                this.commands.removeCommand(Autocomplete.startCommand);
+            }
+        },
+        value: false
+    },
+    enableLiveAutocompletion: {
+        set: function(val) {
+            if (val) {
+                if (!this.completers)
+                    this.completers = Array.isArray(val)? val: completers;
+                this.commands.on('afterExec', doLiveAutocomplete);
+            } else {
+                this.commands.removeListener('afterExec', doLiveAutocomplete);
+            }
+        },
+        value: false
+    },
+    enableSnippets: {
+        set: function(val) {
+            if (val) {
+                this.commands.addCommand(expandSnippet);
+                this.on("changeMode", onChangeMode);
+                onChangeMode(null, this);
+            } else {
+                this.commands.removeCommand(expandSnippet);
+                this.off("changeMode", onChangeMode);
+            }
+        },
+        value: false
+    }
+});
+});
+                (function() {
+                    ace.acequire(["ace/ext/language_tools"], function() {});
+                })();
+            
+
+/***/ }),
+
+/***/ "../../node_modules/brace/mode/yaml.js":
+/*!**********************************************************************!*\
+  !*** /Users/andy/Dev/Work/BA/kibana/node_modules/brace/mode/yaml.js ***!
+  \**********************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+ace.define("ace/mode/yaml_highlight_rules",["require","exports","module","ace/lib/oop","ace/mode/text_highlight_rules"], function(acequire, exports, module) {
+"use strict";
+
+var oop = acequire("../lib/oop");
+var TextHighlightRules = acequire("./text_highlight_rules").TextHighlightRules;
+
+var YamlHighlightRules = function() {
+    this.$rules = {
+        "start" : [
+            {
+                token : "comment",
+                regex : "#.*$"
+            }, {
+                token : "list.markup",
+                regex : /^(?:-{3}|\.{3})\s*(?=#|$)/
+            },  {
+                token : "list.markup",
+                regex : /^\s*[\-?](?:$|\s)/
+            }, {
+                token: "constant",
+                regex: "!![\\w//]+"
+            }, {
+                token: "constant.language",
+                regex: "[&\\*][a-zA-Z0-9-_]+"
+            }, {
+                token: ["meta.tag", "keyword"],
+                regex: /^(\s*\w.*?)(:(?=\s|$))/
+            },{
+                token: ["meta.tag", "keyword"],
+                regex: /(\w+?)(\s*:(?=\s|$))/
+            }, {
+                token : "keyword.operator",
+                regex : "<<\\w*:\\w*"
+            }, {
+                token : "keyword.operator",
+                regex : "-\\s*(?=[{])"
+            }, {
+                token : "string", // single line
+                regex : '["](?:(?:\\\\.)|(?:[^"\\\\]))*?["]'
+            }, {
+                token : "string", // multi line string start
+                regex : /[|>][-+\d\s]*$/,
+                onMatch: function(val, state, stack, line) {
+                    var indent = /^\s*/.exec(line)[0];
+                    if (stack.length < 1) {
+                        stack.push(this.next);
+                    } else {
+                        stack[0] = "mlString";
+                    }
+
+                    if (stack.length < 2) {
+                        stack.push(indent.length);
+                    }
+                    else {
+                        stack[1] = indent.length;
+                    }
+                    return this.token;
+                },
+                next : "mlString"
+            }, {
+                token : "string", // single quoted string
+                regex : "['](?:(?:\\\\.)|(?:[^'\\\\]))*?[']"
+            }, {
+                token : "constant.numeric", // float
+                regex : /(\b|[+\-\.])[\d_]+(?:(?:\.[\d_]*)?(?:[eE][+\-]?[\d_]+)?)(?=[^\d-\w]|$)/
+            }, {
+                token : "constant.numeric", // other number
+                regex : /[+\-]?\.inf\b|NaN\b|0x[\dA-Fa-f_]+|0b[10_]+/
+            }, {
+                token : "constant.language.boolean",
+                regex : "\\b(?:true|false|TRUE|FALSE|True|False|yes|no)\\b"
+            }, {
+                token : "paren.lparen",
+                regex : "[[({]"
+            }, {
+                token : "paren.rparen",
+                regex : "[\\])}]"
+            }, {
+                token : "text",
+                regex : /[^\s,:\[\]\{\}]+/
+            }
+        ],
+        "mlString" : [
+            {
+                token : "indent",
+                regex : /^\s*$/
+            }, {
+                token : "indent",
+                regex : /^\s*/,
+                onMatch: function(val, state, stack) {
+                    var curIndent = stack[1];
+
+                    if (curIndent >= val.length) {
+                        this.next = "start";
+                        stack.splice(0);
+                    }
+                    else {
+                        this.next = "mlString";
+                    }
+                    return this.token;
+                },
+                next : "mlString"
+            }, {
+                token : "string",
+                regex : '.+'
+            }
+        ]};
+    this.normalizeRules();
+
+};
+
+oop.inherits(YamlHighlightRules, TextHighlightRules);
+
+exports.YamlHighlightRules = YamlHighlightRules;
+});
+
+ace.define("ace/mode/matching_brace_outdent",["require","exports","module","ace/range"], function(acequire, exports, module) {
+"use strict";
+
+var Range = acequire("../range").Range;
+
+var MatchingBraceOutdent = function() {};
+
+(function() {
+
+    this.checkOutdent = function(line, input) {
+        if (! /^\s+$/.test(line))
+            return false;
+
+        return /^\s*\}/.test(input);
+    };
+
+    this.autoOutdent = function(doc, row) {
+        var line = doc.getLine(row);
+        var match = line.match(/^(\s*\})/);
+
+        if (!match) return 0;
+
+        var column = match[1].length;
+        var openBracePos = doc.findMatchingBracket({row: row, column: column});
+
+        if (!openBracePos || openBracePos.row == row) return 0;
+
+        var indent = this.$getIndent(doc.getLine(openBracePos.row));
+        doc.replace(new Range(row, 0, row, column-1), indent);
+    };
+
+    this.$getIndent = function(line) {
+        return line.match(/^\s*/)[0];
+    };
+
+}).call(MatchingBraceOutdent.prototype);
+
+exports.MatchingBraceOutdent = MatchingBraceOutdent;
+});
+
+ace.define("ace/mode/folding/coffee",["require","exports","module","ace/lib/oop","ace/mode/folding/fold_mode","ace/range"], function(acequire, exports, module) {
+"use strict";
+
+var oop = acequire("../../lib/oop");
+var BaseFoldMode = acequire("./fold_mode").FoldMode;
+var Range = acequire("../../range").Range;
+
+var FoldMode = exports.FoldMode = function() {};
+oop.inherits(FoldMode, BaseFoldMode);
+
+(function() {
+
+    this.getFoldWidgetRange = function(session, foldStyle, row) {
+        var range = this.indentationBlock(session, row);
+        if (range)
+            return range;
+
+        var re = /\S/;
+        var line = session.getLine(row);
+        var startLevel = line.search(re);
+        if (startLevel == -1 || line[startLevel] != "#")
+            return;
+
+        var startColumn = line.length;
+        var maxRow = session.getLength();
+        var startRow = row;
+        var endRow = row;
+
+        while (++row < maxRow) {
+            line = session.getLine(row);
+            var level = line.search(re);
+
+            if (level == -1)
+                continue;
+
+            if (line[level] != "#")
+                break;
+
+            endRow = row;
+        }
+
+        if (endRow > startRow) {
+            var endColumn = session.getLine(endRow).length;
+            return new Range(startRow, startColumn, endRow, endColumn);
+        }
+    };
+    this.getFoldWidget = function(session, foldStyle, row) {
+        var line = session.getLine(row);
+        var indent = line.search(/\S/);
+        var next = session.getLine(row + 1);
+        var prev = session.getLine(row - 1);
+        var prevIndent = prev.search(/\S/);
+        var nextIndent = next.search(/\S/);
+
+        if (indent == -1) {
+            session.foldWidgets[row - 1] = prevIndent!= -1 && prevIndent < nextIndent ? "start" : "";
+            return "";
+        }
+        if (prevIndent == -1) {
+            if (indent == nextIndent && line[indent] == "#" && next[indent] == "#") {
+                session.foldWidgets[row - 1] = "";
+                session.foldWidgets[row + 1] = "";
+                return "start";
+            }
+        } else if (prevIndent == indent && line[indent] == "#" && prev[indent] == "#") {
+            if (session.getLine(row - 2).search(/\S/) == -1) {
+                session.foldWidgets[row - 1] = "start";
+                session.foldWidgets[row + 1] = "";
+                return "";
+            }
+        }
+
+        if (prevIndent!= -1 && prevIndent < indent)
+            session.foldWidgets[row - 1] = "start";
+        else
+            session.foldWidgets[row - 1] = "";
+
+        if (indent < nextIndent)
+            return "start";
+        else
+            return "";
+    };
+
+}).call(FoldMode.prototype);
+
+});
+
+ace.define("ace/mode/yaml",["require","exports","module","ace/lib/oop","ace/mode/text","ace/mode/yaml_highlight_rules","ace/mode/matching_brace_outdent","ace/mode/folding/coffee"], function(acequire, exports, module) {
+"use strict";
+
+var oop = acequire("../lib/oop");
+var TextMode = acequire("./text").Mode;
+var YamlHighlightRules = acequire("./yaml_highlight_rules").YamlHighlightRules;
+var MatchingBraceOutdent = acequire("./matching_brace_outdent").MatchingBraceOutdent;
+var FoldMode = acequire("./folding/coffee").FoldMode;
+
+var Mode = function() {
+    this.HighlightRules = YamlHighlightRules;
+    this.$outdent = new MatchingBraceOutdent();
+    this.foldingRules = new FoldMode();
+    this.$behaviour = this.$defaultBehaviour;
+};
+oop.inherits(Mode, TextMode);
+
+(function() {
+
+    this.lineCommentStart = ["#", "//"];
+    
+    this.getNextLineIndent = function(state, line, tab) {
+        var indent = this.$getIndent(line);
+
+        if (state == "start") {
+            var match = line.match(/^.*[\{\(\[]\s*$/);
+            if (match) {
+                indent += tab;
+            }
+        }
+
+        return indent;
+    };
+
+    this.checkOutdent = function(state, line, input) {
+        return this.$outdent.checkOutdent(line, input);
+    };
+
+    this.autoOutdent = function(state, doc, row) {
+        this.$outdent.autoOutdent(doc, row);
+    };
+
+
+    this.$id = "ace/mode/yaml";
+}).call(Mode.prototype);
+
+exports.Mode = Mode;
+
+});
+
+
+/***/ }),
+
+/***/ "../../node_modules/brace/theme/github.js":
+/*!*************************************************************************!*\
+  !*** /Users/andy/Dev/Work/BA/kibana/node_modules/brace/theme/github.js ***!
+  \*************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+ace.define("ace/theme/github",["require","exports","module","ace/lib/dom"], function(acequire, exports, module) {
+
+exports.isDark = false;
+exports.cssClass = "ace-github";
+exports.cssText = "\
+.ace-github .ace_gutter {\
+background: #e8e8e8;\
+color: #AAA;\
+}\
+.ace-github  {\
+background: #fff;\
+color: #000;\
+}\
+.ace-github .ace_keyword {\
+font-weight: bold;\
+}\
+.ace-github .ace_string {\
+color: #D14;\
+}\
+.ace-github .ace_variable.ace_class {\
+color: teal;\
+}\
+.ace-github .ace_constant.ace_numeric {\
+color: #099;\
+}\
+.ace-github .ace_constant.ace_buildin {\
+color: #0086B3;\
+}\
+.ace-github .ace_support.ace_function {\
+color: #0086B3;\
+}\
+.ace-github .ace_comment {\
+color: #998;\
+font-style: italic;\
+}\
+.ace-github .ace_variable.ace_language  {\
+color: #0086B3;\
+}\
+.ace-github .ace_paren {\
+font-weight: bold;\
+}\
+.ace-github .ace_boolean {\
+font-weight: bold;\
+}\
+.ace-github .ace_string.ace_regexp {\
+color: #009926;\
+font-weight: normal;\
+}\
+.ace-github .ace_variable.ace_instance {\
+color: teal;\
+}\
+.ace-github .ace_constant.ace_language {\
+font-weight: bold;\
+}\
+.ace-github .ace_cursor {\
+color: black;\
+}\
+.ace-github.ace_focus .ace_marker-layer .ace_active-line {\
+background: rgb(255, 255, 204);\
+}\
+.ace-github .ace_marker-layer .ace_active-line {\
+background: rgb(245, 245, 245);\
+}\
+.ace-github .ace_marker-layer .ace_selection {\
+background: rgb(181, 213, 255);\
+}\
+.ace-github.ace_multiselect .ace_selection.ace_start {\
+box-shadow: 0 0 3px 0px white;\
+}\
+.ace-github.ace_nobold .ace_line > span {\
+font-weight: normal !important;\
+}\
+.ace-github .ace_marker-layer .ace_step {\
+background: rgb(252, 255, 0);\
+}\
+.ace-github .ace_marker-layer .ace_stack {\
+background: rgb(164, 229, 101);\
+}\
+.ace-github .ace_marker-layer .ace_bracket {\
+margin: -1px 0 0 -1px;\
+border: 1px solid rgb(192, 192, 192);\
+}\
+.ace-github .ace_gutter-active-line {\
+background-color : rgba(0, 0, 0, 0.07);\
+}\
+.ace-github .ace_marker-layer .ace_selected-word {\
+background: rgb(250, 250, 255);\
+border: 1px solid rgb(200, 200, 250);\
+}\
+.ace-github .ace_invisible {\
+color: #BFBFBF\
+}\
+.ace-github .ace_print-margin {\
+width: 1px;\
+background: #e8e8e8;\
+}\
+.ace-github .ace_indent-guide {\
+background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAE0lEQVQImWP4////f4bLly//BwAmVgd1/w11/gAAAABJRU5ErkJggg==\") right repeat-y;\
+}";
+
+    var dom = acequire("../lib/dom");
+    dom.importCssString(exports.cssText, exports.cssClass);
+});
+
+
+/***/ }),
+
 /***/ "../../node_modules/builtin-status-codes/browser.js":
 /*!***********************************************************************************!*\
   !*** /Users/andy/Dev/Work/BA/kibana/node_modules/builtin-status-codes/browser.js ***!
@@ -11016,6 +13399,367 @@ const BaalertApp = ({
 
 /***/ }),
 
+/***/ "./public/components/editor/console.tsx":
+/*!**********************************************!*\
+  !*** ./public/components/editor/console.tsx ***!
+  \**********************************************/
+/*! exports provided: Console */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Console", function() { return Console; });
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ "react");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _emotion_react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @emotion/react */ "@emotion/react");
+/* harmony import */ var _emotion_react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_emotion_react__WEBPACK_IMPORTED_MODULE_1__);
+
+
+const Console = props => {
+  let newText = props.testResponse;
+  return Object(_emotion_react__WEBPACK_IMPORTED_MODULE_1__["jsx"])("div", null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_1__["jsx"])("div", {
+    id: "background"
+  }, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_1__["jsx"])("div", {
+    id: "console"
+  }, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_1__["jsx"])("p", {
+    id: "consoletext"
+  }, newText))));
+};
+
+/***/ }),
+
+/***/ "./public/components/editor/editor.tsx":
+/*!*********************************************!*\
+  !*** ./public/components/editor/editor.tsx ***!
+  \*********************************************/
+/*! exports provided: Editor */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Editor", function() { return Editor; });
+/* harmony import */ var _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @babel/runtime/helpers/defineProperty */ "../../node_modules/@babel/runtime/helpers/defineProperty.js");
+/* harmony import */ var _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react */ "react");
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _elastic_eui__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @elastic/eui */ "@elastic/eui");
+/* harmony import */ var _elastic_eui__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var brace_mode_yaml__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! brace/mode/yaml */ "../../node_modules/brace/mode/yaml.js");
+/* harmony import */ var brace_mode_yaml__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(brace_mode_yaml__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var brace_theme_github__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! brace/theme/github */ "../../node_modules/brace/theme/github.js");
+/* harmony import */ var brace_theme_github__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(brace_theme_github__WEBPACK_IMPORTED_MODULE_4__);
+/* harmony import */ var brace_ext_language_tools__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! brace/ext/language_tools */ "../../node_modules/brace/ext/language_tools.js");
+/* harmony import */ var brace_ext_language_tools__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(brace_ext_language_tools__WEBPACK_IMPORTED_MODULE_5__);
+/* harmony import */ var _toast__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../toast */ "./public/components/toast/index.ts");
+/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! axios */ "../../node_modules/axios/index.js");
+/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_7___default = /*#__PURE__*/__webpack_require__.n(axios__WEBPACK_IMPORTED_MODULE_7__);
+/* harmony import */ var https__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! https */ "../../node_modules/https-browserify/index.js");
+/* harmony import */ var https__WEBPACK_IMPORTED_MODULE_8___default = /*#__PURE__*/__webpack_require__.n(https__WEBPACK_IMPORTED_MODULE_8__);
+/* harmony import */ var _console__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./console */ "./public/components/editor/console.tsx");
+/* harmony import */ var _emotion_react__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! @emotion/react */ "@emotion/react");
+/* harmony import */ var _emotion_react__WEBPACK_IMPORTED_MODULE_10___default = /*#__PURE__*/__webpack_require__.n(_emotion_react__WEBPACK_IMPORTED_MODULE_10__);
+
+
+
+
+
+
+
+
+
+
+
+const agent = new https__WEBPACK_IMPORTED_MODULE_8___default.a.Agent({
+  rejectUnauthorized: false
+});
+class Editor extends react__WEBPACK_IMPORTED_MODULE_1___default.a.Component {
+  constructor(props) {
+    super(props);
+
+    _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(this, "saveRule", () => {
+      // const { httpClient } = this.props;
+      // this.setState({ saving: true });
+      const ruleID = this.props.editorMode === 'edit' ? this.props.ruleName : this.state.ruleName;
+      const teamID = this.props.editorMode === 'edit' ? this.props.ruleDir : this.state.teamName;
+      axios__WEBPACK_IMPORTED_MODULE_7___default()({
+        method: 'post',
+        url: `../api/elastalert/rules/${teamID}/${ruleID}`,
+        data: {
+          yaml: this.state.value
+        },
+        headers: {
+          'Content-Type': 'application/json',
+          'kbn-xsrf': 'anything',
+          'Accept': 'application/json, text/plain, */*'
+        },
+        httpsAgent: agent
+      }).then(resp => {
+        if (resp.status === 200) {
+          this.setState({
+            saving: false
+          });
+          Object(_toast__WEBPACK_IMPORTED_MODULE_6__["addToast"])({
+            title: "Saved successfully",
+            text: `Rule '${ruleID}' was saved successfully`,
+            color: "success"
+          });
+          this.props.loadTeams();
+          this.closeModal(); // if (this.props.editorMode !== 'edit') {
+          //   window.location.reload();
+          // }
+          // this.props.updateRuleList();
+        }
+      }).catch(e => {
+        console.log("error cuy");
+        console.log(e);
+        this.setState({
+          saving: false
+        });
+        Object(_toast__WEBPACK_IMPORTED_MODULE_6__["addToast"])({
+          title: "Failed to save",
+          text: `Rule '${ruleID}' could not be saved: (${e})`,
+          color: "danger"
+        });
+      });
+    });
+
+    _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(this, "testRule", () => {
+      // const { httpClient } = this.props;
+      const ruleID = this.props.editorMode === 'edit' ? this.props.ruleName : this.state.ruleName;
+      const teamID = this.props.editorMode === 'edit' ? this.props.ruleDir : this.state.teamName;
+      this.setState({
+        testing: true,
+        testFailed: null,
+        testResponse: null
+      });
+      axios__WEBPACK_IMPORTED_MODULE_7___default()({
+        method: 'post',
+        url: `../api/elastalert/stream/${teamID}/${ruleID}`,
+        data: {
+          yaml: this.state.value
+        },
+        headers: {
+          'Content-Type': 'application/json',
+          'kbn-xsrf': 'anything',
+          'Accept': 'application/json, text/plain, */*'
+        },
+        httpsAgent: agent
+      }).then(resp => {
+        this.setState({
+          testing: false,
+          testFailed: false,
+          testResponse: resp.data.data,
+          isModalVisibleConsole: true
+        });
+      }).catch(err => {
+        this.setState({
+          testing: false,
+          testFailed: true,
+          testResponse: err.data ? err.data : err.data
+        });
+        console.log(err);
+        Object(_toast__WEBPACK_IMPORTED_MODULE_6__["addToast"])({
+          title: "Failed to run test",
+          text: `Test '${ruleID}': (${err})`,
+          color: "danger"
+        });
+      });
+    });
+
+    _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(this, "onChange", value => {
+      this.setState({
+        value: value
+      });
+    });
+
+    _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(this, "setRuleName", e => {
+      this.setState({
+        ruleName: e.target.value
+      });
+    });
+
+    _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(this, "setTeamName", e => {
+      this.setState({
+        teamName: e.target.value
+      });
+    });
+
+    _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(this, "closeModal", () => {
+      if (this.props.editorMode === 'edit') {
+        this.setState({
+          isModalVisible: false
+        });
+        window.location.reload();
+      } else {
+        this.setState({
+          value: '',
+          ruleName: '',
+          isModalVisible: false
+        });
+      }
+    });
+
+    _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(this, "closeModalConsole", () => {
+      this.setState({
+        testResponse: '',
+        isModalVisibleConsole: false
+      });
+    });
+
+    _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(this, "showModal", () => {
+      if (this.props.editorMode === 'edit') {// this.props.loadRule();
+      }
+
+      this.setState({
+        isModalVisible: true,
+        testResponse: null
+      });
+    });
+
+    this.state = {
+      value: '',
+      ruleName: '',
+      teamName: '',
+      isModalVisible: false,
+      isModalVisibleConsole: false,
+      saving: false,
+      testing: false,
+      testResponse: null,
+      testFailed: null,
+      refresh: false
+    };
+    this.props.loadRule = this.loadRule.bind(this);
+  }
+
+  loadRule() {
+    axios__WEBPACK_IMPORTED_MODULE_7___default()({
+      method: 'get',
+      url: `../api/elastalert/rules/${this.props.ruleDir}/${this.props.ruleName}`,
+      httpsAgent: agent
+    }).then(resp => {
+      this.setState({
+        value: resp.data,
+        ruleName: this.props.rule
+      });
+    });
+  }
+
+  componentDidMount() {
+    if (this.props.editorMode === 'edit') {
+      this.loadRule();
+      this.setState({
+        isModalVisible: true,
+        testResponse: null
+      });
+    }
+  }
+
+  componentWillReceiveProps() {
+    if (this.props.editorMode === 'edit') {
+      this.loadRule();
+      this.setState({
+        isModalVisible: true,
+        testResponse: null
+      });
+    }
+  }
+
+  render() {
+    let modal;
+    let modalConsole;
+
+    if (this.state.testResponse && this.state.isModalVisibleConsole) {
+      modalConsole = Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiOverlayMask"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiModal"], {
+        onClose: this.closeModalConsole,
+        style: {
+          width: '900px'
+        }
+      }, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiModalHeader"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiModalHeaderTitle"], null, "Test Output")), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiModalBody"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_console__WEBPACK_IMPORTED_MODULE_9__["Console"], {
+        testResponse: this.state.testResponse
+      })), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiModalFooter"], null)));
+    }
+
+    if (this.state.isModalVisible) {
+      modal = Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiOverlayMask"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiModal"], {
+        onClose: this.closeModal,
+        style: {
+          width: '900px'
+        }
+      }, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiModalHeader"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiModalHeaderTitle"], null, this.props.editorMode === 'edit' ? 'Edit' : 'Create', " rule")), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiModalBody"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiFormRow"], {
+        label: "Rule name"
+      }, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiFieldText"], {
+        name: "ruleName",
+        value: this.props.editorMode === 'edit' ? this.props.ruleName : this.state.ruleName,
+        onChange: this.setRuleName,
+        readOnly: this.props.rule ? true : false,
+        autoFocus: true
+      })), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiFormRow"], {
+        label: "Team name"
+      }, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiFieldText"], {
+        name: "teamName",
+        value: this.props.editorMode === 'edit' ? this.props.ruleDir : this.state.teamName,
+        onChange: this.setTeamName,
+        readOnly: this.props.rule ? true : false
+      })), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiCodeEditor"], {
+        mode: "yaml",
+        theme: "github",
+        width: "100%",
+        height: "400px",
+        value: this.state.value,
+        onChange: this.onChange,
+        setOptions: {
+          fontSize: '14px',
+          enableBasicAutocompletion: true,
+          enableLiveAutocompletion: true
+        }
+      })), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiModalFooter"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiButtonEmpty"], {
+        onClick: () => {
+          this.closeModal();
+        }
+      }, "Cancel"), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiButton"], {
+        onClick: this.testRule,
+        isLoading: this.state.testing
+      }, this.state.testing ? 'Testing..' : 'Test'), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiButton"], {
+        fill: true,
+        onClick: this.saveRule,
+        isLoading: this.state.saving
+      }, this.state.saving ? 'Saving..' : 'Save'))));
+    }
+
+    if (this.props.editorMode === 'create') {
+      return Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])("div", null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_2__["EuiButton"], {
+        onClick: this.showModal,
+        fill: this.props.editorMode === 'edit' ? false : true
+      }, this.props.editorMode === 'edit' ? 'Edit rule' : 'Create rule'), modal, modalConsole);
+    } else if (this.props.editorMode === 'edit') {
+      return Object(_emotion_react__WEBPACK_IMPORTED_MODULE_10__["jsx"])("div", null, modal, modalConsole);
+    }
+  }
+
+}
+
+/***/ }),
+
+/***/ "./public/components/editor/index.ts":
+/*!*******************************************!*\
+  !*** ./public/components/editor/index.ts ***!
+  \*******************************************/
+/*! exports provided: Editor, Console */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony import */ var _editor__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./editor */ "./public/components/editor/editor.tsx");
+/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "Editor", function() { return _editor__WEBPACK_IMPORTED_MODULE_0__["Editor"]; });
+
+/* harmony import */ var _console__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./console */ "./public/components/editor/console.tsx");
+/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "Console", function() { return _console__WEBPACK_IMPORTED_MODULE_1__["Console"]; });
+
+
+
+
+/***/ }),
+
 /***/ "./public/components/rules/index.ts":
 /*!******************************************!*\
   !*** ./public/components/rules/index.ts ***!
@@ -11085,12 +13829,10 @@ class Rules extends react__WEBPACK_IMPORTED_MODULE_1__["Component"] {
   }
 
   componentDidMount() {
-    console.log("mantapgan");
-    axios__WEBPACK_IMPORTED_MODULE_3___default.a.get('http://localhost:3000/rules/' + this.props.rule_dir).then(res => {
+    axios__WEBPACK_IMPORTED_MODULE_3___default.a.get(`../api/elastalert/rules/` + this.props.rule_dir).then(res => {
       this.setState({
-        rules: res.data.rules
+        rules: res.data.data.rules
       });
-      console.log(res.data.rules);
     }).catch(error => {
       console.log(error);
     });
@@ -11210,13 +13952,15 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _elastic_eui__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @elastic/eui */ "@elastic/eui");
 /* harmony import */ var _elastic_eui__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__);
 /* harmony import */ var _rules__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../rules */ "./public/components/rules/index.ts");
-/* harmony import */ var _emotion_react__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! @emotion/react */ "@emotion/react");
-/* harmony import */ var _emotion_react__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(_emotion_react__WEBPACK_IMPORTED_MODULE_6__);
+/* harmony import */ var _editor__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../editor */ "./public/components/editor/index.ts");
+/* harmony import */ var _emotion_react__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! @emotion/react */ "@emotion/react");
+/* harmony import */ var _emotion_react__WEBPACK_IMPORTED_MODULE_7___default = /*#__PURE__*/__webpack_require__.n(_emotion_react__WEBPACK_IMPORTED_MODULE_7__);
 
 
 
 
  // import { METHODS } from 'http';
+
 
 
 
@@ -11232,7 +13976,6 @@ class RulesList extends react__WEBPACK_IMPORTED_MODULE_1___default.a.Component {
     });
 
     _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(this, "toggleDetails", item => {
-      console.log(item);
       const itemIdToExpandedRowMapValues = this.state.itemIdToExpandedRowMap;
       console.log(itemIdToExpandedRowMapValues);
 
@@ -11255,11 +13998,11 @@ class RulesList extends react__WEBPACK_IMPORTED_MODULE_1___default.a.Component {
           description: `${country.flag} ${country.name}`
         }, {
           title: 'Online',
-          description: Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiHealth"], {
+          description: Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiHealth"], {
             color: color
           }, label)
         }];
-        itemIdToExpandedRowMapValues[item.id] = Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_rules__WEBPACK_IMPORTED_MODULE_5__["Rules"], {
+        itemIdToExpandedRowMapValues[item.id] = Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_rules__WEBPACK_IMPORTED_MODULE_5__["Rules"], {
           rule_dir: item.ruleName
         });
       }
@@ -11267,36 +14010,98 @@ class RulesList extends react__WEBPACK_IMPORTED_MODULE_1___default.a.Component {
       this.setState(itemIdToExpandedRowMapValues);
     });
 
+    _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(this, "loadTeams", () => {
+      axios__WEBPACK_IMPORTED_MODULE_2___default.a.get(`../api/baalert/test`, {
+        httpsAgent: agent
+      }).then(res => {
+        let rules_list = res.data.directories.sort();
+        rules_list = this.create_dictionary(rules_list);
+        this.setState({
+          rules_list
+        });
+      }).catch(err => {
+        const errorMessage = err;
+        this.setState({
+          errorMessage
+        });
+      });
+    });
+
     this.state = {
       rules_list: [],
       rules_definition: [],
       errorMessage: '',
       reloadTable: '',
-      itemIdToExpandedRowMap: {}
-    }; // this.updateTableOnSave = this.updateTableOnSave.bind(this)
+      itemIdToExpandedRowMap: {},
+      container_list: []
+    };
+    this.loadTeams = this.loadTeams.bind(this);
   }
 
-  // updateTableOnSave() {
-  //     this.setState({ reloadTable: 'yes' })
-  // }
+  updateTableOnSave() {
+    this.setState({
+      reloadTable: 'yes'
+    });
+  }
+
+  get_online_status(container_status) {
+    let result = false;
+    let container_name = 'elastalert-' + container_status.toLowerCase().replace("_", "-");
+    console.log("container name" + container_name);
+
+    for (const container of this.state.container_list.keys()) {
+      console.log(this.state.container_list[container]);
+      console.log(container_name in this.state.container_list[container]);
+
+      if (container_name in this.state.container_list[container] === true) {
+        console.log("yay ture");
+        result = this.state.container_list[container][container_name];
+      } else {
+        console.log("yay false");
+      }
+    }
+
+    return result;
+  }
+
   create_dictionary(rules) {
     const list = [];
-    console.log(rules);
 
     for (const test of rules.keys()) {
+      console.log("mantaptest");
+      console.log("rules " + rules[test]);
+      let container_status = this.get_online_status(rules[test]);
+      console.log("container status " + container_status);
       list.push({
         id: test,
         ruleName: rules[test],
-        online: true
+        online: container_status
       });
     }
 
     return list;
   }
 
-  componentDidMount() {
-    console.log("huahuahua");
-    axios__WEBPACK_IMPORTED_MODULE_2___default.a.get(`../api/baalert/test`, {
+  async getUserAccount() {
+    await axios__WEBPACK_IMPORTED_MODULE_2___default.a.get(`../api/elastalert/containerstatus`, {
+      httpsAgent: agent
+    }).then(res => {
+      console.log(res.data.data);
+      let container_list = res.data.data.sort();
+      this.setState({
+        container_list
+      });
+      console.log(this.state.container_list);
+    }).catch(err => {
+      const errorMessage = err;
+      this.setState({
+        errorMessage
+      });
+    });
+  }
+
+  async getUserPermissions() {
+    await axios__WEBPACK_IMPORTED_MODULE_2___default.a.get(`../api/baalert/test`, {
       httpsAgent: agent
     }).then(res => {
       let rules_list = res.data.directories.sort();
@@ -11309,12 +14114,65 @@ class RulesList extends react__WEBPACK_IMPORTED_MODULE_1___default.a.Component {
       this.setState({
         errorMessage
       });
-    }); // const rules_list = ["test"];
-    // this.setState({ rules_list });
+    });
+  }
+
+  async componentDidMount() {
+    // axios.get(`../api/elastalert/containerstatus`, { httpsAgent: agent })
+    //     .then(res => {
+    //         console.log(res.data.data)
+    //         let container_list = res.data.data.sort();
+    //         this.setState({ container_list });
+    //         console.log(this.state.container_list)
+    //     }).catch((err) => {
+    //         const errorMessage = err;
+    //         this.setState({ errorMessage })
+    //     });
+    axios__WEBPACK_IMPORTED_MODULE_2___default.a.get(`../api/elastalert/containerstatus`, {
+      httpsAgent: agent
+    }).then(res => {
+      console.log(res.data.data);
+      let container_list = res.data.data.sort();
+      this.setState({
+        container_list
+      });
+      console.log(this.state.container_list);
+      return axios__WEBPACK_IMPORTED_MODULE_2___default.a.get(`../api/baalert/test`, {
+        httpsAgent: agent
+      }).then(res => {
+        let rules_list = res.data.directories.sort();
+        rules_list = this.create_dictionary(rules_list);
+        this.setState({
+          rules_list
+        });
+        return;
+      }).catch(err => {
+        const errorMessage = err;
+        this.setState({
+          errorMessage
+        });
+      });
+    }).catch(err => {
+      const errorMessage = err;
+      this.setState({
+        errorMessage
+      });
+    }); // axios.all([this.getUserAccount(), this.getUserPermissions()])
+    //     .then(axios.spread(function (acct, perms) {
+    //         // Both requests are now complete
+    //     }));
   }
 
   render() {
+    const renderToolsRight = () => {
+      return [Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiButton"], {
+        key: "loadUsers",
+        onClick: this.loadTeams
+      }, "Load Teams")];
+    };
+
     const search = {
+      toolsRight: renderToolsRight(),
       onChange: this.onQueryChange,
       box: {
         incremental: true
@@ -11326,31 +14184,13 @@ class RulesList extends react__WEBPACK_IMPORTED_MODULE_1___default.a.Component {
       icon: 'inspect',
       type: 'icon',
       onClick: this.buttonContent
-    }]; // const items = [{
-    //     id: '1',
-    //     ruleName: 'OPS1-ELK',
-    //     "lastName": 'doe',
-    //     "github": 'johndoe',
-    //     "dateOfBirth": "2020-01-01",
-    //     "nationality": 'NL',
-    //     "online": 'true'
-    //   },
-    //   {
-    //     id: '2',
-    //     ruleName: 'test',
-    //     "lastName": 'doe',
-    //     "github": 'johndoe',
-    //     "dateOfBirth": "2020-01-01",
-    //     "nationality": 'NL',
-    //     "online": 'true'
-    //   }]
-
+    }];
     const items = this.state.rules_list;
     const columns = [{
       align: _elastic_eui__WEBPACK_IMPORTED_MODULE_4__["LEFT_ALIGNMENT"],
       width: '40px',
       isExpander: false,
-      render: item => Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiButtonIcon"], {
+      render: item => Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiButtonIcon"], {
         onClick: () => this.toggleDetails(item),
         "aria-label": this.state.itemIdToExpandedRowMap[item.id] ? 'Collapse' : 'Expand',
         iconType: this.state.itemIdToExpandedRowMap[item.id] ? 'arrowUp' : 'arrowDown'
@@ -11370,7 +14210,7 @@ class RulesList extends react__WEBPACK_IMPORTED_MODULE_1___default.a.Component {
       render: online => {
         const color = online ? 'success' : 'danger';
         const label = online ? 'Running' : 'Error';
-        return Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiHealth"], {
+        return Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiHealth"], {
           color: color
         }, label);
       }
@@ -11381,32 +14221,37 @@ class RulesList extends react__WEBPACK_IMPORTED_MODULE_1___default.a.Component {
     }];
 
     if (this.state.errorMessage) {
-      return Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])("div", null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContent"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContentHeader"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContentHeaderSection"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiTitle"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])("h2", null, "Rules")))), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContentBody"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiText"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiCallOut"], {
+      return Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])("div", null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContent"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContentHeader"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContentHeaderSection"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiTitle"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])("h2", null, "Rules")))), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContentBody"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiText"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiCallOut"], {
         title: "einen Fehler ist aufgetaucht",
         color: "danger",
         iconType: "cross"
-      }, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])("p", null, "API Error: ", this.state.errorMessage.message, ". Bitte kontaktieren sie ", Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiLink"], {
+      }, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])("p", null, "API Error: ", this.state.errorMessage.message, ". Bitte kontaktieren sie ", Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiLink"], {
         href: "mailto:_BA-IT-Systemhaus-OPS1-ELK@arbeitsagentur.de"
       }, "_BA-IT-Systemhaus-OPS1-ELK")))))));
     }
 
     if (!this.state.errorMessage && this.state.rules_list.length > 0) {
-      return Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(react__WEBPACK_IMPORTED_MODULE_1__["Fragment"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiTitle"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])("h2", null, "Rules")), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])("br", null), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiInMemoryTable"], {
+      return Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(react__WEBPACK_IMPORTED_MODULE_1__["Fragment"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContent"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContentHeader"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContentHeaderSection"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiTitle"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])("h2", null, "Rules"))), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContentHeaderSection"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_editor__WEBPACK_IMPORTED_MODULE_6__["Editor"], {
+        editorMode: "create",
+        loadTeams: () => this.loadTeams()
+      }))), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiHorizontalRule"], null), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiPageContentBody"], null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiInMemoryTable"], {
         itemId: "id",
         items: items,
         columns: columns,
         hasActions: true,
         search: search,
+        sorting: true,
         responsive: true,
         tableLayout: "auto",
         isExpandable: true,
+        pagination: true,
         itemIdToExpandedRowMap: this.state.itemIdToExpandedRowMap
-      }));
+      }), Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])("br", null))));
     }
 
-    return Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])("h2", null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiLoadingChart"], {
+    return Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])("h2", null, Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])(_elastic_eui__WEBPACK_IMPORTED_MODULE_4__["EuiLoadingChart"], {
       size: "xl"
-    }), "\xA0\xA0", Object(_emotion_react__WEBPACK_IMPORTED_MODULE_6__["jsx"])("font", {
+    }), "\xA0\xA0", Object(_emotion_react__WEBPACK_IMPORTED_MODULE_7__["jsx"])("font", {
       size: "5"
     }, "Loading"));
   }
@@ -11575,8 +14420,8 @@ class StatusUI extends react__WEBPACK_IMPORTED_MODULE_0__["Component"] {
   }
 
   componentDidMount() {
-    setInterval(() => this.totalAlerts(), 1000);
-    setInterval(() => this.failedAlerts(), 1000);
+    setInterval(() => this.totalAlerts(), 10000);
+    setInterval(() => this.failedAlerts(), 10000);
   }
 
   render() {
@@ -11610,6 +14455,50 @@ class StatusUI extends react__WEBPACK_IMPORTED_MODULE_0__["Component"] {
     }, "Successful Alerts")))))));
   }
 
+}
+
+/***/ }),
+
+/***/ "./public/components/toast/index.ts":
+/*!******************************************!*\
+  !*** ./public/components/toast/index.ts ***!
+  \******************************************/
+/*! exports provided: addToast */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony import */ var _toast__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./toast */ "./public/components/toast/toast.tsx");
+/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "addToast", function() { return _toast__WEBPACK_IMPORTED_MODULE_0__["addToast"]; });
+
+
+
+/***/ }),
+
+/***/ "./public/components/toast/toast.tsx":
+/*!*******************************************!*\
+  !*** ./public/components/toast/toast.tsx ***!
+  \*******************************************/
+/*! exports provided: addToast */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "addToast", function() { return addToast; });
+/* harmony import */ var _kibana_services__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../../kibana-services */ "./public/kibana-services.ts");
+
+function addToast({
+  color,
+  title,
+  text,
+  time = 3000
+}) {
+  Object(_kibana_services__WEBPACK_IMPORTED_MODULE_0__["getToasts"])().add({
+    title,
+    text,
+    toastLifeTimeMs: time,
+    color
+  });
 }
 
 /***/ }),
