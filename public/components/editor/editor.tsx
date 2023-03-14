@@ -163,7 +163,7 @@ export class Editor extends React.Component {
   closeModal = () => {
     if (this.props.editorMode === 'edit') {
       this.setState({ isModalVisible: false });
-      window.location.reload();
+      // window.location.reload();
     } else {
       this.setState({ value: '', ruleName: '', isModalVisible: false });
     }
