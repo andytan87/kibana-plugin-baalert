@@ -5,7 +5,8 @@ import {
   EuiIcon,
 } from '@elastic/eui';
 
-import { Rules } from "../rules";
+import { RulesList } from "../rules_list";
+import { RulesListBitbucket } from "../rules_list_bitbucket"
 
 export class Tabs extends Component {
  
@@ -26,16 +27,21 @@ export class Tabs extends Component {
                   ),
                 content: (
                     <Fragment>
-                        <Rules />  
+                        <RulesList />  
                     </Fragment>
                 ),
                 },
                 {
                 id: 'bitbucket-alerts',
-                name: 'Bitbucket Alerts',
+                name: (
+                    <span>
+                      <EuiIcon type="color" />
+                      &nbsp;Bitbucket Alerts
+                    </span>
+                ),
                 content: (
                     <Fragment>
-                        test
+                        <RulesListBitbucket />
                     </Fragment>
                 ),
                 },

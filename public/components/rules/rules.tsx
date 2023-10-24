@@ -71,6 +71,7 @@ export class Rules extends Component {
       }).catch(error => {
         console.log(error);
       });
+      this.forceUpdate()
   };
 
   closeDestroyModal = () => {
@@ -79,6 +80,10 @@ export class Rules extends Component {
 
   showDestroyModal = () => {
     this.setState({ isDestroyModalVisible: true });
+  }
+
+  closeModal = () => {
+    this.setState({ isModalVisible: false });
   }
 
   getRowProps = (item) => {
@@ -103,23 +108,25 @@ export class Rules extends Component {
 
   refreshPage = () => {
     console.log("refresh page")
-    this.setState({ refresh: true });
+    // this.setState({ refresh: true });
+    this.forceUpdate();
   }
 
   deleteRule = user => {
-    deleteId = user.firstName;
+    deleteId = user.ruleName;
     this.setState({ isDestroyModalVisible: true, isModalVisible: false });
   }
 
   editRule = user => {
-    console.log("eeditRule")
+    console.log("editRule")
+    console.log(user)
     ruleDir = this.props.rule_dir;
-    ruleId = user.firstName;
+    ruleId = user.ruleName;
     this.setState({ isModalVisible: true });
   }
 
   prodDeploy = user => {
-    prodId = user.firstName;
+    prodId = user.ruleName;
     this.setState({ isModalDeployVisible: true, isDestroyModalVisible: false, isModalVisible: false });
   }
 
@@ -153,7 +160,6 @@ export class Rules extends Component {
   render() {
 
     if (this.state.isModalVisible) {
-      console.log("modal is visible")
       editorEdit = (
         <Editor editorMode="edit" ruleName={ruleId} ruleDir={ruleDir} />
       )
@@ -237,27 +243,28 @@ export class Rules extends Component {
       hideForMobile: true,
       'data-test-subj': 'firstNameCell',
     },
-    {
-      field: 'firstName',
-      name: 'Full Name',
-      isMobileHeader: true,
-    },
-    {
-      field: 'nationality',
-      name: 'Type',
-      sortable: true,
-      hideForMobile: true,
-      'data-test-subj': 'firstNameCell',
-    }, {
-      field: 'online',
-      name: 'Status',
-      dataType: 'boolean',
-      render: (online) => {
-        const color = online ? 'success' : 'danger';
-        const label = online ? 'Running' : 'Error';
-        return <EuiHealth color={color}>{label}</EuiHealth>;
-      }
-    },
+    // {
+    //   field: 'firstName',
+    //   name: 'Full Name',
+    //   isMobileHeader: true,
+    // },
+    // {
+    //   field: 'nationality',
+    //   name: 'Type',
+    //   sortable: true,
+    //   hideForMobile: true,
+    //   'data-test-subj': 'firstNameCell',
+    // },
+    // {
+    //   field: 'online',
+    //   name: 'Status',
+    //   dataType: 'boolean',
+    //   render: (online) => {
+    //     const color = online ? 'success' : 'danger';
+    //     const label = online ? 'Running' : 'Error';
+    //     return <EuiHealth color={color}>{label}</EuiHealth>;
+    //   }
+    // },
     {
       name: 'Actions',
       actions

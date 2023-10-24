@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React, { Component, useState } from 'react';
 import {
   EuiCodeEditor,
   EuiButton,
@@ -41,10 +41,22 @@ export class Editor extends React.Component {
       testResponse: null,
       testFailed: null,
       refresh: false
-    };    
+    };
 
     this.props.loadRule = this.loadRule.bind(this);
   }
+  
+  loadTeams = () => {
+    axios.get(`../api/baalert/test`, { httpsAgent: agent })
+        .then(res => {
+            let rules_list = res.data.directories.sort();
+            rules_list = this.create_dictionary(rules_list);
+            this.setState({ rules_list });
+        }).catch((err) => {
+            const errorMessage = err;
+            this.setState({ errorMessage })
+        });
+};
 
   loadRule() {
     axios({
@@ -52,14 +64,17 @@ export class Editor extends React.Component {
       url: `../api/elastalert/rules/${this.props.ruleDir}/${this.props.ruleName}`,
       httpsAgent: agent
     }).then(resp => {
-      this.setState({ value: resp.data, ruleName: this.props.rule })
-    })
+      this.setState({ value: resp.data.data, ruleName: this.props.rule })
+    }).catch((err) => {
+      console.log("error: " + err)
+      this.setState({ errorMessage: false });
+  })
 
   }
   
   saveRule = () => {
     // const { httpClient } = this.props;
-    // this.setState({ saving: true });
+    this.setState({ saving: true });
     const ruleID = this.props.editorMode === 'edit' ? this.props.ruleName  : this.state.ruleName;
     const teamID = this.props.editorMode === 'edit' ? this.props.ruleDir : this.state.teamName;
 
@@ -84,7 +99,6 @@ export class Editor extends React.Component {
           text: `Rule '${ruleID}' was saved successfully`,
           color: "success",
         });
-        this.props.loadTeams();
         this.closeModal();
         // if (this.props.editorMode !== 'edit') {
         //   window.location.reload();
@@ -130,7 +144,7 @@ export class Editor extends React.Component {
           testing: false,
           testFailed: false,
           testResponse: resp.data.data,
-          isModalVisibleConsole: true,
+          // isModalVisibleConsole: true,
         })
 
       }).catch(err => {
@@ -162,8 +176,9 @@ export class Editor extends React.Component {
 
   closeModal = () => {
     if (this.props.editorMode === 'edit') {
+      // this.forceUpdate()
       this.setState({ isModalVisible: false });
-      // window.location.reload();
+      window.location.reload(false);
     } else {
       this.setState({ value: '', ruleName: '', isModalVisible: false });
     }
@@ -193,6 +208,7 @@ export class Editor extends React.Component {
       this.setState({ isModalVisible: true, testResponse: null  });
     }
   }
+
 
   render() {
     let modal;

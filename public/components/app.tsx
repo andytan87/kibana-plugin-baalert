@@ -25,18 +25,14 @@ import {
 } from '@elastic/eui';
 
 import { StatusUI } from "./status_ui";
-
-import { Rules } from "./rules";
-
-import { RulesList } from "./rules_list";
+import { APIStatus } from "./status_ui";
 
 import { Tabs } from "./tabs";
 
+import { RulesList } from "./rules_list";
+
 import { CoreStart } from '../../../../src/core/public';
 import { NavigationPublicPluginStart } from '../../../../src/plugins/navigation/public';
-
-import { PLUGIN_ID, PLUGIN_NAME } from '../../common';
-import { integer } from '@elastic/elasticsearch/api/types';
 
 interface BaalertAppDeps {
   basename: string;
@@ -77,13 +73,7 @@ export const BaalertApp = ({ basename, notifications, http, navigation}: Baalert
             <EuiPageBody>
               <EuiPageHeader>
                 <EuiPageHeaderSection>
-                  <EuiTitle size="s">
-                    <h1>
-                      <EuiIcon type="logoElasticStack" size="xl" />
-                      &nbsp;BA Alert&nbsp;&nbsp;
-                      <EuiHealth color={color}>{label}</EuiHealth>
-                    </h1>
-                  </EuiTitle>
+                  <APIStatus/>
                 </EuiPageHeaderSection>
               </EuiPageHeader>
               <EuiPageContent hasBorder={false}>
@@ -92,14 +82,8 @@ export const BaalertApp = ({ basename, notifications, http, navigation}: Baalert
                 <EuiSpacer size="xxl" />
                 </EuiPageContentHeader>
                 <EuiPageContentBody>
-                  {/* <EuiButton type="primary" size="s" onClick={onClickHandler}>
-                    <FormattedMessage id="baalert.buttonText" defaultMessage="Get data" />
-                  </EuiButton>
-                  <EuiText>
-                    {timestamp || 'Unknown'}
-                  </EuiText> */}
-                  {/* <Tabs/> */}
-                  <RulesList/>
+                  <Tabs/>
+                  {/* <RulesList/> */}
                   {/* <Rules/> */}
                   {/* <EuiText>
                     <p>

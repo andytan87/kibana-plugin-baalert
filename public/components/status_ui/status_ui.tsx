@@ -171,8 +171,9 @@ export class StatusUI extends Component {
   }
 
   componentDidMount() {
-    setInterval(() => this.totalAlerts(), 10000);
-    setInterval(() => this.failedAlerts(), 10000);
+    setInterval(() => this.totalAlerts(), 1000);
+    setInterval(() => this.successfullAlerts(), 1000);
+    setInterval(() => this.failedAlerts(), 1000);
 
   }
 
@@ -182,6 +183,7 @@ export class StatusUI extends Component {
         <EuiFlexGroup>
           <EuiFlexItem>
             <EuiPanel hasBorder={true}>
+              <a href="">
                   <EuiStat
                     title={this.state.totalAlert.toString()}
                     textAlign="center"
@@ -193,14 +195,16 @@ export class StatusUI extends Component {
                   >
                     Total Alerts
                   </EuiStat>
+                  </a>
             </EuiPanel>
           </EuiFlexItem>
           <EuiFlexItem>
             <EuiPanel hasBorder={true}>
               <EuiFlexGroup>
                 <EuiFlexItem>
+                  <a href="">
                   <EuiStat
-                    title={this.state.failedAlert.toString()}
+                    title={this.state.successfullAlert.toString()}
                     textAlign="center"
                     titleColor="success"
                     description={
@@ -210,6 +214,7 @@ export class StatusUI extends Component {
                   >
                     Successful Alerts
                   </EuiStat>
+                  </a>
                 </EuiFlexItem>
               </EuiFlexGroup>
             </EuiPanel>
@@ -218,17 +223,19 @@ export class StatusUI extends Component {
             <EuiPanel hasBorder={true}>
               <EuiFlexGroup>
                 <EuiFlexItem>
+                <a href="">
                   <EuiStat
                     title={this.state.failedAlert.toString()}
                     textAlign="center"
                     titleColor="danger"
                     description={
-                      <EuiTextColor color="danger">
+                      <EuiTextColor color="dangeopr">
                       </EuiTextColor>
                     }
                   >
-                    Successful Alerts
+                    Failed Alerts
                   </EuiStat>
+                  </a>
                 </EuiFlexItem>
               </EuiFlexGroup>
             </EuiPanel>

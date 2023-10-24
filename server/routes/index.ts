@@ -7,7 +7,6 @@ import { schema } from '@kbn/config-schema';
 export function defineRoutes(router: IRouter, config: Config) {
 
 
-
   router.get(
     {
       path: '/internal/foo/bar',
@@ -17,6 +16,29 @@ export function defineRoutes(router: IRouter, config: Config) {
       return response.ok({
         body: {
           time: new Date().toISOString(),
+        },
+      });
+    }
+  );
+
+  router.get(
+    {
+      path: '/api/elastalert/rules/{team}/{rule}',
+      validate: {
+        params: schema.object({
+          team: schema.string(),
+          rule: schema.string()
+        }),
+      },
+    },
+    async (context, req, res) => {
+      const response = await fetch(config.url + '/rules' + '/' + req.params.team + '/' + req.params.rule);
+      const result = await response.text();
+      
+
+      return res.ok({
+        body: {
+          data: result,
         },
       });
     }
@@ -38,6 +60,24 @@ export function defineRoutes(router: IRouter, config: Config) {
       });
     }
   );
+
+  router.get(
+    {
+      path: '/api/baalert/bitbucket',
+      validate: false,
+    },
+    async (context, req, res) => {
+      // console.log(config.url);
+      const response = await fetch(config.url + '/rules-bitbucket');
+      const result = await response.json();
+      return res.ok({
+        body: {
+          directories: result.directories,
+        },
+      });
+    }
+  );
+
 
   router.get(
     {
@@ -101,6 +141,23 @@ export function defineRoutes(router: IRouter, config: Config) {
     },
     async (context, req, res) => {
       const response = await fetch(config.url + '/container-status');
+      const result = await response.json();
+      console.log(result)
+      return res.ok({
+        body: {
+          data: result.results,
+        },
+      });
+    }
+  );
+
+  router.get(
+    {
+      path: '/api/elastalert/containerstatus-bitbucket',
+      validate: false,
+    },
+    async (context, req, res) => {
+      const response = await fetch(config.url + '/container-status-bitbucket');
       const result = await response.json();
       console.log(result)
       return res.ok({

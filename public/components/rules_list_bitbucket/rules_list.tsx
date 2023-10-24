@@ -38,7 +38,7 @@ const agent = new https.Agent({
     rejectUnauthorized: false
 });
 
-export class RulesList extends React.Component {
+export class RulesListBitbucket extends React.Component {
     constructor(props) {
         super(props);
 
@@ -65,7 +65,7 @@ export class RulesList extends React.Component {
         
         let result = false;
         console.log("before container status " + container_status)
-        let container_name = 'elastalert-' + container_status.toLowerCase().replaceAll("_","-")
+        let container_name = 'elastalert-bitbucket-' + container_status.toLowerCase().replaceAll("_","-")
 
         console.log("after container status " + container_name)
 
@@ -107,7 +107,7 @@ export class RulesList extends React.Component {
 
 
     async getUserAccount() {
-        await axios.get(`../api/elastalert/containerstatus`, { httpsAgent: agent })
+        await axios.get(`../api/elastalert/containerstatus-bitbucket`, { httpsAgent: agent })
             .then(res => {
                 console.log(res.data.data)
                 let container_list = res.data.data.sort();
@@ -121,7 +121,7 @@ export class RulesList extends React.Component {
     }
 
     async getUserPermissions() {
-        await axios.get(`../api/baalert/test`, { httpsAgent: agent })
+        await axios.get(`../api/baalert/bitbucket`, { httpsAgent: agent })
             .then(res => {
                 let rules_list = res.data.directories.sort();
                 rules_list = this.create_dictionary(rules_list);
@@ -148,7 +148,7 @@ export class RulesList extends React.Component {
         //         this.setState({ errorMessage })
         //     });
 
-        axios.get(`../api/elastalert/containerstatus`, { httpsAgent: agent })
+        axios.get(`../api/elastalert/containerstatus-bitbucket`, { httpsAgent: agent })
             .then(res => {
                 console.log("container status")
                 console.log(res.data.data)
@@ -156,7 +156,7 @@ export class RulesList extends React.Component {
 
                 this.setState({ container_list });
                 console.log(this.state.container_list)
-                return axios.get(`../api/baalert/test`, { httpsAgent: agent })
+                return axios.get(`../api/baalert/bitbucket`, { httpsAgent: agent })
                     .then(res => {
 
                         let rules_list = res.data.directories.sort();
@@ -187,6 +187,11 @@ export class RulesList extends React.Component {
         window.open("https://elk.sdst.sbaintern.de/app/kibana#/discover?_g=(refreshInterval:(pause:!t,value:0),time:(from:now%2Fd,mode:quick,to:now%2Fd))&_a=(columns:!(_source),filters:!(('$state':(store:appState),meta:(alias:!n,disabled:!f,index:'12adf4a0-739e-11ec-ab24-d76c708bdd56',key:kubernetes.pod_name,negate:!f,params:(query:elastalert-" + team +  ",type:phrase),type:phrase,value:elastalert-" + team +  "),query:(match:(kubernetes.pod_name:(query:elastalert-" + team + ",type:phrase))))),index:'12adf4a0-739e-11ec-ab24-d76c708bdd56',interval:auto,query:(language:lucene,query:''),sort:!(_score,desc))", '_blank').focus();
     };
 
+    showBitbucketLink = item => {
+        let team = item.ruleName
+        window.open("https://bitbucket.webapp.sdst.sbaintern.de/projects/ELK/repos/elastalert-rules/browse/" + team)
+    }
+ 
     toggleDetails = item => {
         const itemIdToExpandedRowMapValues = this.state.itemIdToExpandedRowMap;
         console.log(itemIdToExpandedRowMapValues)
@@ -219,7 +224,7 @@ export class RulesList extends React.Component {
     };
 
     loadTeams = () => {
-        axios.get(`../api/baalert/test`, { httpsAgent: agent })
+        axios.get(`../api/baalert/bitbucket`, { httpsAgent: agent })
             .then(res => {
                 let rules_list = res.data.directories.sort();
                 rules_list = this.create_dictionary(rules_list);
@@ -257,27 +262,24 @@ export class RulesList extends React.Component {
         const actions = [{
             name: 'Logs',
             description: 'Edit this rule',
+            icon: 'notebookApp',
+            type: 'icon',
+            onClick: item => (
+                this.showBitbucketLink(item)),
+        },
+        {
+            name: 'Logs',
+            description: 'Edit this rule',
             icon: 'inspect',
             type: 'icon',
             onClick: item => (
                 this.buttonContent(item)),
-        }];
+        }
+        ];
 
         const items = this.state.rules_list;
 
         const columns = [
-            {
-                align: LEFT_ALIGNMENT,
-                width: '40px',
-                isExpander: false,
-                render: item => (
-                    <EuiButtonIcon
-                        onClick={() => this.toggleDetails(item)}
-                        aria-label={this.state.itemIdToExpandedRowMap[item.id] ? 'Collapse' : 'Expand'}
-                        iconType={this.state.itemIdToExpandedRowMap[item.id] ? 'arrowUp' : 'arrowDown'}
-                    />
-                ),
-            },
             {
                 align: LEFT_ALIGNMENT,
                 width: '300px',
