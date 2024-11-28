@@ -144,7 +144,7 @@ export class Editor extends React.Component {
           testing: false,
           testFailed: false,
           testResponse: resp.data.data,
-          // isModalVisibleConsole: true,
+          isModalVisibleConsole: true,
         })
 
       }).catch(err => {
