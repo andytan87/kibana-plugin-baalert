@@ -23,7 +23,7 @@ import {
 } from '@elastic/eui';
 
 import { Editor } from "../editor";
-
+import { addToast } from '../toast';
 import axios from 'axios';
 import https from 'https';
 
@@ -140,17 +140,24 @@ export class Rules extends Component {
     axios({
       url: '../api/elastalert/rules/' + this.props.rule_dir + '/' + deleteId,
       method: 'delete',
-      httpsAgent: agent,
       headers: {
         "kbn-xsrf": 'anything'
       }
     })
       .then(res => {
         console.log("tests");
-        addToast('Delete Sucessfully', "The rule " + deleteId + " was sucessfully deleted<br/>test", 'success');
-        this.loadRules();
+        addToast({
+          title: "Deleted successfully", 
+          text: `Rule '${deleteId}' was deleted successfully`,
+          color: "success",
+        })
+        this.componentDidMount();
       }).catch((err) => {
-        addToast("Delete Failed", "Cannot delete " + deleteId + " <br>Reason: " + err.message, 'danger');
+        addToast({
+          title: "Delete Failed", 
+          text: `Rule '${deleteId}' cannot be deleted, Reason:'${err.message}'`,
+          color: "danger",
+        })
       });
 
     this.setState({ isDestroyModalVisible: false });

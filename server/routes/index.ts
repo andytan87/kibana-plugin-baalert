@@ -203,6 +203,46 @@ export function defineRoutes(router: IRouter, config: Config) {
     }
   );
 
+  router.delete(
+    {
+      path: '/api/elastalert/rules/{team}/{rule}', // Replace with your plugin name and endpoint
+      validate: {
+        params: schema.object({
+          team: schema.string(),
+          rule: schema.string()
+        }),
+      },
+    },
+    async (context, req, res) => {
+      const response = await fetch(
+        config.url + '/rules/' + req.params.team + '/' + req.params.rule,
+        {
+          method: 'delete',
+          body: JSON.stringify(req.body),
+          headers: {'Content-Type': 'application/json'}
+        }
+      );
+      const result = await response;
+      if (response.status == 500) { 
+        return res.customError({
+          statusCode: 500,
+          body: { 
+            message: "delete failed",
+          },
+        });
+      }
+      else {
+        console.log("ok res mantap")
+        console.log(result.body);
+        return res.ok({
+          body: {
+            message: "delete successfuly",
+          },
+        });
+      }
+
+    }
+  );
 
   router.post(
     {
